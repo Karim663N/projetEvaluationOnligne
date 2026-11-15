@@ -1,0 +1,181 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String             @id @default(cuid())
+  name         String
+  email        String             @unique
+  password     String
+  role         String             @default("STUDENT") // STUDENT, TEACHER, ADMIN
+  isActive     Boolean            @default(true)
+  avatarUrl    String?
+  cvUrl        String?
+  cvData       String?
+  resetToken   String?
+  resetTokenExp DateTime?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  submissions  Submission[]
+  examsCreated Exam[]             @relation("AdminExams")
+  classes      SchoolClass[]      @relation("TeacherClasses")
+  enrollments  ClassEnrollment[]
+  badges       UserBadge[]
+  certificates Certificate[]
+  auditLogs    AuditLog[]         @relation("AuditActor")
+}
+
+model Admin {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SchoolClass {
+  id          String            @id @default(cuid())
+  name        String
+  description String?
+  joinCode    String            @unique @default(cuid())
+  teacherId   String?
+  teacher     User?             @relation("TeacherClasses", fields: [teacherId], references: [id], onDelete: SetNull)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  enrollments ClassEnrollment[]
+  exams       Exam[]
+}
+
+model ClassEnrollment {
+  id        String      @id @default(cuid())
+  classId   String
+  schoolClass SchoolClass @relation(fields: [classId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime    @default(now())
+  status    String      @default("APPROVED") // PENDING, APPROVED, REJECTED
+
+  @@unique([classId, userId])
+}
+
+model Exam {
+  id          String       @id @default(cuid())
+  title       String
+  description String?
+  duration    Int          // in minutes
+  passingScore Float      @default(0)
+  classId     String?
+  schoolClass SchoolClass? @relation(fields: [classId], references: [id], onDelete: SetNull)
+  published   Boolean      @default(false)
+  createdById String
+  createdBy   User         @relation("AdminExams", fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  questions   Question[]
+  submissions Submission[]
+}
+
+model Question {
+  id            String    @id @default(cuid())
+  examId        String
+  exam          Exam      @relation(fields: [examId], references: [id], onDelete: Cascade)
+  text          String
+  imageUrl      String?
+  points        Int       @default(1)
+  questionType  String    @default("SINGLE") // SINGLE, MULTIPLE, TEXT_ESSAY, BOOLEAN
+  options       Option[]
+  answers       Answer[]
+  createdAt     DateTime  @default(now())
+}
+
+model Option {
+  id         String   @id @default(cuid())
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  text       String
+  imageUrl   String?
+  isCorrect  Boolean  @default(false)
+  answers    Answer[]
+}
+
+model Submission {
+  id          String    @id @default(cuid())
+  examId      String
+  exam        Exam      @relation(fields: [examId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  score       Float     @default(0)
+  totalScore  Float     @default(0)
+  status      String    @default("SUBMITTED") // IN_PROGRESS, SUBMITTED, GRADED
+  submittedAt DateTime  @default(now())
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  feedback    String?
+  answers     Answer[]
+}
+
+model Answer {
+  id           String     @id @default(cuid())
+  submissionId String
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  questionId   String
+  question     Question   @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  selectedOptionId String?
+  selectedOption   Option?    @relation(fields: [selectedOptionId], references: [id], onDelete: SetNull)
+  textResponse     String?
+  score            Float      @default(0)
+  feedback         String?
+}
+
+model Badge {
+  id          String      @id @default(cuid())
+  name        String      @unique
+  description String?
+  imageUrl    String?
+  users       UserBadge[]
+}
+
+model UserBadge {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badgeId   String
+  badge     Badge    @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+  awardedAt DateTime @default(now())
+
+  @@unique([userId, badgeId])
+}
+
+model Certificate {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  examTitle   String
+  description String?
+  issuerName  String?
+  issuedAt    DateTime @default(now())
+  code        String   @unique @default(cuid())
+}
+
+model SystemSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  actor     User?    @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  action    String
+  target    String?
+  details   String?
+  createdAt DateTime @default(now())
+}
