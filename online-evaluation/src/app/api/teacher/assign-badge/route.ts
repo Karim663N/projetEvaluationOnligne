@@ -1,0 +1,37 @@
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/auth";
+
+export async function POST(request: Request) {
+  try {
+    const user = await getCurrentUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (user.role !== "TEACHER" && user.role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+    const body = await request.json();
+    const { userId, badgeId, classId } = body;
+    if (!userId || !badgeId) return NextResponse.json({ error: "User ID and Badge ID are required" }, { status: 400 });
+    const student = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+    if (!student || student.role !== "STUDENT") return NextResponse.json({ error: "Badges can only be awarded to student accounts" }, { status: 400 });
+
+    const enrollments = await prisma.classEnrollment.findMany({
+      where: { userId, status: "APPROVED", ...(classId ? { classId } : {}) },
+      select: { id: true, classId: true },
+    });
+    let enrollment: { id: string; classId: string } | null = enrollments[0] || null;
+    if (user.role === "TEACHER") {
+      const teacherClasses = await prisma.schoolClass.findMany({ where: { teacherId: user.id }, select: { id: true } });
+      const teacherClassIds = new Set(teacherClasses.map((c) => c.id));
+      enrollment = enrollments.find((e) => teacherClassIds.has(e.classId)) || null;
+    }
+    if (!enrollment) return NextResponse.json({ error: "Student must be enrolled in one of your classes" }, { status: 403 });
+    const badge = await prisma.badge.findUnique({ where: { id: badgeId }, select: { id: true } });
+    if (!badge) return NextResponse.json({ error: "Badge not found" }, { status: 404 });
+
+    const existing = await prisma.userBadge.findFirst({ where: { userId, badgeId } });
+    if (existing) return NextResponse.json({ error: "User already has this badge" }, { status: 400 });
+
+    const userBadge = await prisma.userBadge.create({ data: { userId, badgeId } });
+    return NextResponse.json({ userBadge }, { status: 201 });
+  } catch { return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
+}

@@ -1,0 +1,159 @@
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  name          String
+  email         String    @unique
+  password      String
+  role          String    @default("STUDENT") // STUDENT, TEACHER, ADMIN
+  isActive      Boolean   @default(true)
+  avatarUrl     String?
+  cvUrl         String?
+  cvData        String?
+  resetToken    String?
+  resetTokenExp DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Admin {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SchoolClass {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  description String?
+  joinCode    String   @unique
+  teacherId   String?  @db.ObjectId
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model ClassEnrollment {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  classId   String   @db.ObjectId
+  userId    String   @db.ObjectId
+  createdAt DateTime @default(now())
+  status    String   @default("APPROVED") // PENDING, APPROVED, REJECTED
+
+  @@unique([classId, userId])
+}
+
+model Exam {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  title        String
+  description  String?
+  duration     Int // in minutes
+  passingScore Float   @default(0)
+  classId      String? @db.ObjectId
+  published    Boolean @default(false)
+  createdById  String  @db.ObjectId
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Question {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  examId       String   @db.ObjectId
+  text         String
+  imageUrl     String?
+  points       Int      @default(1)
+  questionType String   @default("SINGLE") // SINGLE, MULTIPLE, TEXT_ESSAY, BOOLEAN
+  createdAt    DateTime @default(now())
+}
+
+model Option {
+  id          String  @id @default(auto()) @map("_id") @db.ObjectId
+  questionId  String  @db.ObjectId
+  text        String
+  imageUrl    String?
+  isCorrect   Boolean @default(false)
+}
+
+model Submission {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  examId      String    @db.ObjectId
+  userId      String    @db.ObjectId
+  score       Float     @default(0)
+  totalScore  Float     @default(0)
+  status      String    @default("SUBMITTED") // IN_PROGRESS, SUBMITTED, GRADED
+  submittedAt DateTime  @default(now())
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  feedback    String?
+}
+
+model Answer {
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  submissionId     String   @db.ObjectId
+  questionId       String   @db.ObjectId
+  selectedOptionId String?  @db.ObjectId
+  textResponse     String?
+  score            Float    @default(0)
+  feedback         String?
+}
+
+model Badge {
+  id          String  @id @default(auto()) @map("_id") @db.ObjectId
+  name        String  @unique
+  description String?
+  imageUrl    String?
+}
+
+model UserBadge {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  badgeId   String   @db.ObjectId
+  awardedAt DateTime @default(now())
+
+  @@unique([userId, badgeId])
+}
+
+model Certificate {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId          String   @db.ObjectId
+  examTitle       String
+  description     String?
+  issuerName      String?
+  signatureDataUrl String?
+  issuedAt        DateTime @default(now())
+  code            String   @unique
+}
+
+model CertificateTemplate {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  title       String   @unique
+  description String?
+  issuerName  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model SystemSetting {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  actorId   String?  @db.ObjectId
+  action    String
+  target    String?
+  details   String?
+  createdAt DateTime @default(now())
+}
