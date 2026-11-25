@@ -121,6 +121,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const startedAt = existingAttempt?.startedAt ?? submission.startedAt;
     await scoreAndStoreReport({
       submissionId: submission.id,
+      examId: exam.id,
+      examDurationMin: exam.duration,
       questions: graded,
       sessionSeconds: (Date.now() - startedAt.getTime()) / 1000,
       payload: proctoring,

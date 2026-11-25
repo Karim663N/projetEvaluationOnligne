@@ -19,6 +19,10 @@ export async function GET() {
         _count: {
           select: { questions: true },
         },
+        // etudiant : sa propre tentative (a commencer / reprendre / terminee) pour afficher le bon bouton
+        ...(user.role === "STUDENT"
+          ? { submissions: { where: { userId: user.id }, select: { status: true, score: true, totalScore: true } } }
+          : {}),
       },
     });
     return NextResponse.json({ exams }, { status: 200 });

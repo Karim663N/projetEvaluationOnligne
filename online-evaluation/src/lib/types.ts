@@ -67,6 +67,7 @@ export interface ExamView {
   createdById?: string;
   _count?: { questions: number };
   questions?: QuestionView[];
+  submissions?: Array<{ status: string; score: number; totalScore: number }>; // etudiant : sa tentative
 }
 
 export interface StudentSubmissionView {

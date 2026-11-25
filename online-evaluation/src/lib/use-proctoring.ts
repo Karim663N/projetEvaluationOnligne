@@ -133,6 +133,8 @@ export function useProctoring(active: boolean, firstQuestionId: string | null, c
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [webcamStatus, setWebcamStatus] = useState<WebcamStatus>('off');
   const [frameCount, setFrameCount] = useState(0);
+  // dernier releve : sert uniquement a aider l'etudiant a se placer (visage detecte ou non)
+  const [lastFrame, setLastFrame] = useState<WebcamFrame | null>(null);
 
   const markActive = useCallback((questionId: string) => { current.current = questionId; }, []);
 
@@ -206,8 +208,10 @@ export function useProctoring(active: boolean, firstQuestionId: string | null, c
           ctx.drawImage(video, (vw - sw) / 2, (vh - sh) / 2, sw, sh, 0, 0, W, H);
           ctx.restore();
           try {
-            frames.current.push(extract(tasks, work));
+            const frame = extract(tasks, work);
+            frames.current.push(frame);
             setFrameCount(frames.current.length);
+            setLastFrame(frame);
           } catch { /* image ignoree */ }
         }, FRAME_PERIOD_MS);
       } catch (error) {
@@ -229,5 +233,5 @@ export function useProctoring(active: boolean, firstQuestionId: string | null, c
     events: { ...events.current },
   }), [consentWebcam]);
 
-  return { videoRef, webcamStatus, frameCount, markActive, snapshot };
+  return { videoRef, webcamStatus, frameCount, lastFrame, markActive, snapshot };
 }

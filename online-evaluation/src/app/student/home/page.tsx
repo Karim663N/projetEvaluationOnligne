@@ -1,21 +1,11 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import type { ClassView, ExamView, StudentProfileView, StudentSubmissionView } from '@/lib/types';
+import type { ClassView, ExamView, StudentProfileView } from '@/lib/types';
 import { translations, Language } from '@/lib/i18n';
 import { useRoleGuard } from '@/lib/use-role-guard';
-import { useProctoring } from '@/lib/use-proctoring';
-
-// Loose shape used only to render questions; adjust to match your ExamView type.
-interface ExamQuestionLike {
-  id: string;
-  text?: string;
-  content?: string;
-  prompt?: string;
-  type?: string;
-  options?: Array<string | { id?: string; text?: string }>;
-}
+import ExamRunner, { type RunnerExam, type SavedAnswer } from '@/components/exam/ExamRunner';
 
 export default function StudentHome() {
   useRoleGuard('STUDENT');
@@ -27,22 +17,14 @@ export default function StudentHome() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'exams' | 'profile' | 'classes' | 'cv'>('exams');
 
-  // Exam taking
+  // Exam taking (ecran : components/exam/ExamRunner.tsx)
   const [activeExam, setActiveExam] = useState<ExamView | null>(null);
-  const [selectedAnswers, setSelectedAnswers] = useState<{ [questionId: string]: string }>({});
-  const [essayAnswers, setEssayAnswers] = useState<{ [questionId: string]: string }>({});
-  const [secondsLeft, setSecondsLeft] = useState(0);
-  const examForm = useRef<HTMLFormElement>(null);
-  const autoSubmitStarted = useRef(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState<Pick<StudentSubmissionView, 'id' | 'score' | 'totalScore' | 'status' | 'submittedAt'> | null>(null);
+  const [attemptInfo, setAttemptInfo] = useState<{ expiresAt: string; answers: SavedAnswer[] } | null>(null);
 
   // Surveillance ExamGuard AI : consentement explicite avant l'examen (EF2), webcam optionnelle
   const [pendingExamId, setPendingExamId] = useState<string | null>(null);
   const [consentAccepted, setConsentAccepted] = useState(false);
-  const [consentWebcam, setConsentWebcam] = useState(true);
-  const firstQuestionId = ((activeExam as unknown as { questions?: ExamQuestionLike[] } | null)?.questions?.[0]?.id) ?? null;
-  const proctor = useProctoring(Boolean(activeExam) && !result, firstQuestionId, consentWebcam);
+  const [consentWebcam, setConsentWebcam] = useState(false); // consentement explicite : jamais pre-coche
 
   // Classes
   const [classes, setClasses] = useState<ClassView[]>([]);
@@ -74,24 +56,6 @@ export default function StudentHome() {
     if (savedLang && translations[savedLang]) setLang(savedLang);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Exam countdown + auto-submit
-  useEffect(() => {
-    if (!activeExam || result) return;
-    autoSubmitStarted.current = false;
-    const end = Date.now() + (activeExam.duration || 0) * 60 * 1000;
-    const tick = () => {
-      const left = Math.max(0, Math.ceil((end - Date.now()) / 1000));
-      setSecondsLeft(left);
-      if (left === 0 && !autoSubmitStarted.current) {
-        autoSubmitStarted.current = true;
-        examForm.current?.requestSubmit();
-      }
-    };
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [activeExam, result]);
 
   const changeLanguage = (newLang: Language) => {
     setLang(newLang);
@@ -262,49 +226,18 @@ export default function StudentHome() {
       const res = await fetch(`/api/exams/${examId}`);
       const data = await res.json();
       if (res.ok) {
+        // reprise possible : heure de fin et reponses deja enregistrees viennent du serveur
+        setAttemptInfo({ expiresAt: attemptData.attempt.expiresAt, answers: attemptData.answers || [] });
         setActiveExam(data.exam ?? data); // la route renvoie { exam }
-        setSubmitting(false);
-        setSelectedAnswers({});
-        setEssayAnswers({});
-        setResult(null);
       }
     } catch (err) {
       console.error(err);
-    }
-  };
-
-  const handleSubmitExam = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (submitting) return;
-    setSubmitting(true);
-    try {
-      // format attendu par la route : un tableau { questionId, selectedOptionId | textResponse }
-      const answers = [
-        ...Object.entries(selectedAnswers).map(([questionId, selectedOptionId]) => ({ questionId, selectedOptionId })),
-        ...Object.entries(essayAnswers).map(([questionId, textResponse]) => ({ questionId, textResponse })),
-      ];
-      const res = await fetch(`/api/exams/${activeExam?.id}/submit`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ answers, proctoring: proctor.snapshot() }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setResult(data.submission ?? data); // la route renvoie { message, submission }
-        setSubmitting(false);
-      } else {
-        setSubmitting(false);
-        alert(data.error || 'Submit failed');
-      }
-    } catch (err) {
-      console.error(err);
-      setSubmitting(false);
     }
   };
 
   const closeExam = () => {
     setActiveExam(null);
-    setResult(null);
+    setAttemptInfo(null);
     fetchExams();
     fetchProfile();
   };
@@ -318,110 +251,16 @@ export default function StudentHome() {
     }
   };
 
-  const formatTime = (s: number) =>
-    `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
-
   // ---------- Exam taking screen ----------
-  if (activeExam) {
-    const questions = ((activeExam as unknown as { questions?: ExamQuestionLike[] }).questions || []);
+  if (activeExam && attemptInfo) {
     return (
-      <div className="min-h-screen bg-slate-50 p-10">
-        <div className="mx-auto max-w-3xl space-y-6">
-          <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div>
-              <h2 className="text-2xl font-black text-slate-900">{activeExam.title}</h2>
-              <p className="text-sm text-slate-500">{activeExam.description}</p>
-            </div>
-            {!result && (
-              <div className={`rounded-xl px-4 py-2 font-mono text-xl font-bold ${secondsLeft <= 60 ? 'bg-rose-100 text-rose-700' : 'bg-blue-50 text-blue-700'}`}>
-                ⏱ {formatTime(secondsLeft)}
-              </div>
-            )}
-          </div>
-
-          {!result && (
-            <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              {consentWebcam && (
-                <video ref={proctor.videoRef} muted playsInline className="h-24 w-32 rounded-lg bg-slate-900 object-cover" style={{ transform: 'scaleX(-1)' }} />
-              )}
-              <div className="text-sm text-slate-600">
-                <p className="font-bold text-slate-800">Surveillance ExamGuard AI active</p>
-                <p>
-                  Webcam :{' '}
-                  {{ off: 'désactivée (score navigateur seul)', loading: 'démarrage…', on: `active — ${proctor.frameCount} relevés d'indicateurs`, denied: 'accès refusé', error: 'indisponible' }[proctor.webcamStatus]}
-                </p>
-                <p className="text-xs text-slate-400">Seuls des indicateurs (positions, temps, compteurs) sont envoyés, jamais d&apos;image ni de vidéo. Un score n&apos;est pas une preuve : l&apos;enseignant décide.</p>
-              </div>
-            </div>
-          )}
-
-          {result ? (
-            <div className="rounded-2xl border border-emerald-200 bg-white p-8 text-center shadow-sm space-y-4">
-              <h3 className="text-2xl font-black text-slate-900">Exam submitted</h3>
-              <p className="text-4xl font-black text-emerald-600">
-                {result.score} / {result.totalScore}
-              </p>
-              <p className="text-sm text-slate-500">Status: {result.status}</p>
-              <button onClick={closeExam} className="rounded-xl bg-blue-600 px-6 py-3 font-bold text-white hover:bg-blue-700 transition-all">
-                Back to dashboard
-              </button>
-            </div>
-          ) : (
-            <form ref={examForm} onSubmit={handleSubmitExam} className="space-y-6">
-              {questions.map((q, index) => {
-                const label = q.text || q.content || q.prompt || '';
-                const isEssay = q.type === 'ESSAY' || !q.options || q.options.length === 0;
-                return (
-                  <div
-                    key={q.id}
-                    onPointerDownCapture={() => proctor.markActive(q.id)}
-                    onFocusCapture={() => proctor.markActive(q.id)}
-                    className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-3"
-                  >
-                    <p className="font-bold text-slate-900">
-                      {index + 1}. {label}
-                    </p>
-                    {isEssay ? (
-                      <textarea
-                        value={essayAnswers[q.id] || ''}
-                        onChange={(e) => setEssayAnswers({ ...essayAnswers, [q.id]: e.target.value })}
-                        rows={5}
-                        className="w-full rounded-xl border border-slate-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                      />
-                    ) : (
-                      <div className="space-y-2">
-                        {q.options!.map((opt, i) => {
-                          const value = typeof opt === 'string' ? opt : opt.id || opt.text || String(i);
-                          const text = typeof opt === 'string' ? opt : opt.text || value;
-                          return (
-                            <label key={value} className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 hover:bg-slate-50">
-                              <input
-                                type="radio"
-                                name={`q-${q.id}`}
-                                value={value}
-                                checked={selectedAnswers[q.id] === value}
-                                onChange={() => setSelectedAnswers({ ...selectedAnswers, [q.id]: value })}
-                              />
-                              <span>{text}</span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-              <button
-                type="submit"
-                disabled={submitting}
-                className="w-full rounded-xl bg-blue-600 px-6 py-3 font-bold text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700 disabled:opacity-50 transition-all"
-              >
-                {submitting ? 'Submitting...' : 'Submit exam'}
-              </button>
-            </form>
-          )}
-        </div>
-      </div>
+      <ExamRunner
+        exam={activeExam as unknown as RunnerExam}
+        expiresAt={attemptInfo.expiresAt}
+        savedAnswers={attemptInfo.answers}
+        consentWebcam={consentWebcam}
+        onClose={closeExam}
+      />
     );
   }
 
@@ -816,15 +655,30 @@ export default function StudentHome() {
                           <span>❓ {t.questions}: {exam._count?.questions || 0}</span>
                         </div>
                       </div>
-                      <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
-                        <span className="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">Ready</span>
-                        <button
-                          onClick={() => { setPendingExamId(exam.id); setConsentAccepted(false); }}
-                          className="rounded-xl bg-blue-600 px-5 py-2.5 font-bold text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all"
-                        >
-                          {t.startExam}
-                        </button>
-                      </div>
+                      {(() => {
+                        const attempt = exam.submissions?.[0];
+                        if (attempt && attempt.status !== 'IN_PROGRESS') {
+                          return (
+                            <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
+                              <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full">
+                                {attempt.status === 'GRADED' ? `Terminé · ${attempt.score} / ${attempt.totalScore}` : 'Remis · en correction'}
+                              </span>
+                              <span className="text-sm font-semibold text-slate-400">Copie remise</span>
+                            </div>
+                          );
+                        }
+                        return (
+                          <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
+                            <span className={`text-xs font-bold px-3 py-1 rounded-full ${attempt ? 'text-amber-700 bg-amber-50' : 'text-blue-600 bg-blue-50'}`}>{attempt ? 'En cours' : 'Disponible'}</span>
+                            <button
+                              onClick={() => { setPendingExamId(exam.id); setConsentAccepted(false); setConsentWebcam(false); }}
+                              className="rounded-xl bg-blue-600 px-5 py-2.5 font-bold text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all"
+                            >
+                              {attempt ? 'Reprendre' : t.startExam}
+                            </button>
+                          </div>
+                        );
+                      })()}
                     </div>
                   ))}
                 </div>

@@ -18,7 +18,7 @@ export async function GET() {
       include: {
         submission: {
           select: {
-            id: true, score: true, totalScore: true, status: true, submittedAt: true, startedAt: true,
+            id: true, score: true, totalScore: true, status: true, submittedAt: true, startedAt: true, completedAt: true,
             user: { select: { id: true, name: true, email: true } },
             exam: { select: { id: true, title: true } },
           },

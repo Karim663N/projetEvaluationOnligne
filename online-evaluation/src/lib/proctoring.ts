@@ -6,6 +6,38 @@ export const ML_API_URL = process.env.ML_API_URL || "http://127.0.0.1:8000";
 const ML_TIMEOUT_MS = Number(process.env.ML_TIMEOUT_MS || 20000);
 const MAX_FRAMES = 3000;
 
+// « Temps ideal » par question pour la branche B.
+//  - fixed (defaut, convention de l'equipe) : 180 s ;
+//  - adaptive : mediane des temps de reponse des copies deja remises pour cet examen (comme dans le jeu
+//    d'entrainement, ~50 % des reponses d'un etudiant typique en dessous) ; repli tant qu'il y a moins de
+//    MIN_COHORT_ANSWERS temps : 77 % du temps alloue par question (ratio median observe dans le jeu).
+//  Verification : ml/reports/ideal_time.md (simulation : 63 % de fausses alertes en fixe vs 9 % en adaptatif).
+export const IDEAL_TIME_MODE = process.env.EXAMGUARD_IDEAL_TIME_MODE === "adaptive" ? "adaptive" : "fixed";
+const FIXED_IDEAL_S = 180;
+const MIN_COHORT_ANSWERS = 30;
+
+function median(values: number[]) {
+  const s = [...values].sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+async function idealTime(examId: string, durationMin: number, nQuestions: number): Promise<{ seconds: number; source: string }> {
+  if (IDEAL_TIME_MODE === "fixed") return { seconds: FIXED_IDEAL_S, source: "fixe : 180 s par question (convention de l'équipe)" };
+  const previous = await prisma.proctoringReport.findMany({ where: { submission: { examId } }, select: { details: true } });
+  const times = previous.flatMap((r) => {
+    try {
+      const d = JSON.parse(r.details);
+      return Array.isArray(d.temps_par_question) ? d.temps_par_question.filter((t: unknown) => typeof t === "number") : [];
+    } catch { return []; }
+  });
+  if (times.length >= MIN_COHORT_ANSWERS) {
+    return { seconds: Math.max(5, Math.round(median(times))), source: `adaptatif : médiane de ${times.length} temps de réponse de l'examen` };
+  }
+  const allotted = (durationMin * 60) / Math.max(nQuestions, 1);
+  return { seconds: Math.max(5, Math.round(0.77 * allotted)), source: `adaptatif (repli, ${times.length} temps < ${MIN_COHORT_ANSWERS}) : 77 % du temps alloué par question` };
+}
+
 export type WebcamFrame = Record<string, number>;
 
 export interface ProctoringPayload {
@@ -42,6 +74,8 @@ function sanitizeFrames(frames: unknown): WebcamFrame[] {
  *  ne doit pas empecher la remise de la copie (le rapport est alors marque ML_UNAVAILABLE). */
 export async function scoreAndStoreReport(opts: {
   submissionId: string;
+  examId: string;
+  examDurationMin: number;
   questions: GradedQuestion[];
   sessionSeconds: number;
   payload: ProctoringPayload | undefined;
@@ -53,12 +87,14 @@ export async function scoreAndStoreReport(opts: {
     .map((q) => ({ seconds: Math.max(0, Math.min(86400, Number(seconds[q.id]) || 0)), correct: q.correct }));
   const frames = payload.consentWebcam ? sanitizeFrames(payload.frames) : [];
   const browserEvents = sanitizeEvents(payload.events);
+  const ideal = await idealTime(opts.examId, opts.examDurationMin, opts.questions.length);
   const body = {
     exam_mode: "remote",
     tot_question: Math.max(1, opts.questions.length),
     session_seconds: Math.max(0, Math.min(86400, Math.round(opts.sessionSeconds))),
     answers,
     frames,
+    ideal_seconds: ideal.seconds,
     k: 5,
   };
 
@@ -93,7 +129,12 @@ export async function scoreAndStoreReport(opts: {
     fusionMode: typeof fusion.mode === "string" ? fusion.mode : null,
     webcamFrames: webcam?.n_images ?? 0,
     browserEvents: JSON.stringify(browserEvents),
-    details: JSON.stringify(data ?? { erreur: errorText, requete: { ...body, frames: `${frames.length} images` } }),
+    // temps par question conserves (sans identifiant de question) pour le temps ideal adaptatif des copies suivantes
+    details: JSON.stringify({
+      ...(data ?? { erreur: errorText, requete: { ...body, frames: `${frames.length} images` } }),
+      temps_par_question: answers.map((a) => a.seconds),
+      temps_ideal: ideal,
+    }),
   };
   return prisma.proctoringReport.upsert({
     where: { submissionId: opts.submissionId },

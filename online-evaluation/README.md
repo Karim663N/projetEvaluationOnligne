@@ -25,15 +25,20 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 L'application appelle le service ML ExamGuard AI (dépôt du module ML, dossier `ml/`, fichier `service.py`, FastAPI)
 à chaque remise de copie. Flux :
 
-1. **Avant l'examen** : fenêtre de consentement (surveillance obligatoire, webcam facultative).
-2. **Pendant l'examen** (`src/lib/use-proctoring.ts`) : temps cumulé par question, compteurs d'événements navigateur
-   (changements d'onglet, pertes de focus, copier/coller/couper, clics droits) et, si la webcam est acceptée,
-   26 indicateurs MediaPipe extraits **dans le navigateur** toutes les 2 s. Aucune image ni vidéo n'est envoyée.
+1. **Avant l'examen** : fenêtre de consentement (surveillance obligatoire, webcam facultative et jamais pré-cochée).
+2. **Pendant l'examen** (`src/components/exam/ExamRunner.tsx`) : une question à la fois au lieu d'une longue page,
+   grille de navigation (répondue / sans réponse / à revoir), raccourcis clavier (← → naviguer, 1–9 ou A–Z répondre,
+   F marquer à revoir), enregistrement automatique (reprise après rechargement), minuteur calculé depuis l'heure de
+   fin du serveur (remise automatique à 0), écran de révision avant remise.
+   La surveillance (`src/lib/use-proctoring.ts`) mesure le temps sur la question réellement affichée, compte les
+   événements navigateur (changements d'onglet, pertes de focus, copier/coller/couper, clics droits) et, si la webcam
+   est acceptée, extrait 26 indicateurs MediaPipe **dans le navigateur** toutes les 2 s. Aucune image ni vidéo n'est envoyée.
 3. **À la remise** (`src/app/api/exams/[id]/submit/route.ts` → `src/lib/proctoring.ts`) : appel de
-   `POST {ML_API_URL}/score-session` ; le rapport (scores, alerte, explications SHAP, événements) est stocké dans la
-   table `ProctoringReport`. Si le service ML est arrêté, la copie est quand même remise (rapport `ML_UNAVAILABLE`).
-4. **Enseignant** : page `/teacher/surveillance` — alertes expliquées, décision confirmer / rejeter / revue
-   (journalisée dans `AuditLog`).
+   `POST {ML_API_URL}/score-session` ; le rapport (scores, alerte, états de fraude, explications SHAP, événements) est
+   stocké dans la table `ProctoringReport`. Si le service ML est arrêté, la copie est quand même remise (rapport `ML_UNAVAILABLE`).
+4. **Enseignant** : page `/teacher/surveillance` — file de tri (alertes à examiner d'abord, puis risque décroissant),
+   une copie dépliée à la fois avec jauge de risque, états observés (fiabilité mesurée), chronologie, explications SHAP ;
+   décision confirmer / rejeter / revue (journalisée dans `AuditLog`), puis ouverture automatique de la copie suivante.
 
 Lancer en local (deux terminaux) :
 
@@ -48,7 +53,11 @@ npm run db:seed         # comptes de démonstration (voir prisma/seed.ts)
 npm run dev             # http://localhost:3000
 ```
 
-Variables facultatives : `ML_API_URL` (défaut `http://127.0.0.1:8000`), `ML_TIMEOUT_MS` (défaut 20000).
+Variables facultatives : `ML_API_URL` (défaut `http://127.0.0.1:8000`), `ML_TIMEOUT_MS` (défaut 20000),
+`EXAMGUARD_IDEAL_TIME_MODE` : `fixed` (défaut, 180 s par question, convention de l'équipe) ou `adaptive` (médiane des
+temps de réponse des copies déjà remises pour l'examen ; repli à 77 % du temps alloué par question tant qu'il y a moins
+de 30 temps). Simulation du module ML : 63 % de fausses alertes en `fixed` contre 9 % en `adaptive` pour un rythme
+honnête de 75 s par question.
 La webcam nécessite Chrome ou Edge sur `localhost` (contexte sécurisé). Un score n'est pas une preuve : l'enseignant décide.
 
 ## Question image uploads
