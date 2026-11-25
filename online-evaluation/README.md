@@ -54,10 +54,10 @@ npm run dev             # http://localhost:3000
 ```
 
 Variables facultatives : `ML_API_URL` (défaut `http://127.0.0.1:8000`), `ML_TIMEOUT_MS` (défaut 20000),
-`EXAMGUARD_IDEAL_TIME_MODE` : `fixed` (défaut, 180 s par question, convention de l'équipe) ou `adaptive` (médiane des
-temps de réponse des copies déjà remises pour l'examen ; repli à 77 % du temps alloué par question tant qu'il y a moins
-de 30 temps). Simulation du module ML : 63 % de fausses alertes en `fixed` contre 9 % en `adaptive` pour un rythme
-honnête de 75 s par question.
+`EXAMGUARD_IDEAL_TIME_MODE` : `adaptive` (défaut : médiane des temps de réponse des copies déjà remises pour
+l'examen ; repli à 77 % du temps alloué par question tant qu'il y a moins de 30 temps) ou `fixed` (180 s par question,
+ancienne convention de l'équipe). Simulation du module ML : 63 % de fausses alertes en `fixed` contre 9 % en
+`adaptive` pour un rythme honnête de 75 s par question, triche détectée à 100 % dans les deux cas.
 La webcam nécessite Chrome ou Edge sur `localhost` (contexte sécurisé). Un score n'est pas une preuve : l'enseignant décide.
 
 ## Question image uploads

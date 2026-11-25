@@ -7,12 +7,12 @@ const ML_TIMEOUT_MS = Number(process.env.ML_TIMEOUT_MS || 20000);
 const MAX_FRAMES = 3000;
 
 // « Temps ideal » par question pour la branche B.
-//  - fixed (defaut, convention de l'equipe) : 180 s ;
-//  - adaptive : mediane des temps de reponse des copies deja remises pour cet examen (comme dans le jeu
+//  - adaptive (defaut) : mediane des temps de reponse des copies deja remises pour cet examen (comme dans le jeu
 //    d'entrainement, ~50 % des reponses d'un etudiant typique en dessous) ; repli tant qu'il y a moins de
-//    MIN_COHORT_ANSWERS temps : 77 % du temps alloue par question (ratio median observe dans le jeu).
+//    MIN_COHORT_ANSWERS temps : 77 % du temps alloue par question (ratio median observe dans le jeu) ;
+//  - fixed (EXAMGUARD_IDEAL_TIME_MODE=fixed) : 180 s, ancienne convention de l'equipe.
 //  Verification : ml/reports/ideal_time.md (simulation : 63 % de fausses alertes en fixe vs 9 % en adaptatif).
-export const IDEAL_TIME_MODE = process.env.EXAMGUARD_IDEAL_TIME_MODE === "adaptive" ? "adaptive" : "fixed";
+export const IDEAL_TIME_MODE = process.env.EXAMGUARD_IDEAL_TIME_MODE === "fixed" ? "fixed" : "adaptive";
 const FIXED_IDEAL_S = 180;
 const MIN_COHORT_ANSWERS = 30;
 
