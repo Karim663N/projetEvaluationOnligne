@@ -43,7 +43,27 @@ function loadVision(): Promise<VisionModule> {
   });
 }
 
+// MediaPipe (WebAssembly) ecrit ses messages d'information sur console.error
+// (« INFO: Created TensorFlow Lite XNNPACK delegate for CPU. », lignes « I1125 ... » / « W1125 ... »).
+// En developpement, Next.js compte chaque console.error comme un « Issue » : on redirige UNIQUEMENT
+// ces messages d'information vers console.info. Les vraies erreurs restent des erreurs.
+const MEDIAPIPE_INFO = /^(INFO: |[IW]\d{4} \d{2}:\d{2}:\d{2})/;
+function quietMediaPipeLogs() {
+  const w = window as unknown as { __egQuietLogs?: boolean };
+  if (w.__egQuietLogs) return;
+  w.__egQuietLogs = true;
+  const original = console.error.bind(console);
+  console.error = (...args: unknown[]) => {
+    if (typeof args[0] === 'string' && MEDIAPIPE_INFO.test(args[0])) {
+      console.info('[MediaPipe]', ...args);
+      return;
+    }
+    original(...args);
+  };
+}
+
 async function createTasks(): Promise<Tasks> {
+  quietMediaPipeLogs();
   const v = await loadVision();
   const fs = await v.FilesetResolver.forVisionTasks!(`${MP}/wasm`);
   const opt = (path: string) => ({ baseOptions: { modelAssetPath: path, delegate: 'CPU' }, runningMode: 'IMAGE' });
