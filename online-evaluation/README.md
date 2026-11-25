@@ -20,6 +20,37 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Surveillance ExamGuard AI (module ML)
+
+L'application appelle le service ML ExamGuard AI (dépôt du module ML, dossier `ml/`, fichier `service.py`, FastAPI)
+à chaque remise de copie. Flux :
+
+1. **Avant l'examen** : fenêtre de consentement (surveillance obligatoire, webcam facultative).
+2. **Pendant l'examen** (`src/lib/use-proctoring.ts`) : temps cumulé par question, compteurs d'événements navigateur
+   (changements d'onglet, pertes de focus, copier/coller/couper, clics droits) et, si la webcam est acceptée,
+   26 indicateurs MediaPipe extraits **dans le navigateur** toutes les 2 s. Aucune image ni vidéo n'est envoyée.
+3. **À la remise** (`src/app/api/exams/[id]/submit/route.ts` → `src/lib/proctoring.ts`) : appel de
+   `POST {ML_API_URL}/score-session` ; le rapport (scores, alerte, explications SHAP, événements) est stocké dans la
+   table `ProctoringReport`. Si le service ML est arrêté, la copie est quand même remise (rapport `ML_UNAVAILABLE`).
+4. **Enseignant** : page `/teacher/surveillance` — alertes expliquées, décision confirmer / rejeter / revue
+   (journalisée dans `AuditLog`).
+
+Lancer en local (deux terminaux) :
+
+```bash
+# 1. service ML (environnement conda examguard-ml), depuis le dossier ml/ du module
+python -m uvicorn service:app --host 127.0.0.1 --port 8000
+
+# 2. application, depuis online-evaluation/
+npm install
+npx prisma db push      # les migrations du dépôt sont incohérentes (ClassEnrollment manquant) : db push recrée le schéma
+npm run db:seed         # comptes de démonstration (voir prisma/seed.ts)
+npm run dev             # http://localhost:3000
+```
+
+Variables facultatives : `ML_API_URL` (défaut `http://127.0.0.1:8000`), `ML_TIMEOUT_MS` (défaut 20000).
+La webcam nécessite Chrome ou Edge sur `localhost` (contexte sécurisé). Un score n'est pas une preuve : l'enseignant décide.
+
 ## Question image uploads
 
 Teachers and administrators can upload JPEG, PNG, WebP, and GIF images up to 5 MB while building questions. Files are stored in `public/uploads` and served through the authenticated `/api/uploads/images/[filename]` route so they can be viewed by enrolled students. Production deployments must preserve the `public/uploads` directory between restarts; ephemeral serverless filesystems will need a persistent volume or object storage adapter.

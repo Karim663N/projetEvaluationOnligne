@@ -118,6 +118,31 @@ model Submission {
   completedAt DateTime?
   feedback    String?
   answers     Answer[]
+  proctoring  ProctoringReport?
+}
+
+// Rapport de surveillance ExamGuard AI (module ML) : un par copie.
+// Seuls des indicateurs sont stockes (temps, compteurs, scores), jamais d'image ni de video.
+model ProctoringReport {
+  id              String     @id @default(cuid())
+  submissionId    String     @unique
+  submission      Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  mlStatus        String     @default("OK") // OK, ML_UNAVAILABLE, ERROR
+  consentWebcam   Boolean    @default(false)
+  browserScore    Float?     // probabilite branche B ramenee a la prevalence de deploiement
+  webcamScore     Float?     // moyenne des images, branche A
+  fusedScore      Float?
+  threshold       Float?
+  alert           Boolean    @default(false)
+  fusionMode      String?    // "webcam + navigateur" | "navigateur seul"
+  webcamFrames    Int        @default(0)
+  browserEvents   String     @default("{}") // JSON : changements d'onglet, copier-coller... (regles affichees, pas de ML)
+  details         String     @default("{}") // JSON : reponse complete du service ML (explications, chronologie)
+  status          String     @default("PENDING") // PENDING, CONFIRMED, REJECTED, REVIEW
+  decisionNote    String?
+  decidedById     String?
+  decidedAt       DateTime?
+  createdAt       DateTime   @default(now())
 }
 
 model Answer {

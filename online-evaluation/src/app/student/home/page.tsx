@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { ClassView, ExamView, StudentProfileView, StudentSubmissionView } from '@/lib/types';
 import { translations, Language } from '@/lib/i18n';
 import { useRoleGuard } from '@/lib/use-role-guard';
+import { useProctoring } from '@/lib/use-proctoring';
 
 // Loose shape used only to render questions; adjust to match your ExamView type.
 interface ExamQuestionLike {
@@ -35,6 +36,13 @@ export default function StudentHome() {
   const autoSubmitStarted = useRef(false);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<Pick<StudentSubmissionView, 'id' | 'score' | 'totalScore' | 'status' | 'submittedAt'> | null>(null);
+
+  // Surveillance ExamGuard AI : consentement explicite avant l'examen (EF2), webcam optionnelle
+  const [pendingExamId, setPendingExamId] = useState<string | null>(null);
+  const [consentAccepted, setConsentAccepted] = useState(false);
+  const [consentWebcam, setConsentWebcam] = useState(true);
+  const firstQuestionId = ((activeExam as unknown as { questions?: ExamQuestionLike[] } | null)?.questions?.[0]?.id) ?? null;
+  const proctor = useProctoring(Boolean(activeExam) && !result, firstQuestionId, consentWebcam);
 
   // Classes
   const [classes, setClasses] = useState<ClassView[]>([]);
@@ -254,7 +262,7 @@ export default function StudentHome() {
       const res = await fetch(`/api/exams/${examId}`);
       const data = await res.json();
       if (res.ok) {
-        setActiveExam(data);
+        setActiveExam(data.exam ?? data); // la route renvoie { exam }
         setSubmitting(false);
         setSelectedAnswers({});
         setEssayAnswers({});
@@ -270,14 +278,19 @@ export default function StudentHome() {
     if (submitting) return;
     setSubmitting(true);
     try {
+      // format attendu par la route : un tableau { questionId, selectedOptionId | textResponse }
+      const answers = [
+        ...Object.entries(selectedAnswers).map(([questionId, selectedOptionId]) => ({ questionId, selectedOptionId })),
+        ...Object.entries(essayAnswers).map(([questionId, textResponse]) => ({ questionId, textResponse })),
+      ];
       const res = await fetch(`/api/exams/${activeExam?.id}/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ answers: selectedAnswers, essayAnswers }),
+        body: JSON.stringify({ answers, proctoring: proctor.snapshot() }),
       });
       const data = await res.json();
       if (res.ok) {
-        setResult(data);
+        setResult(data.submission ?? data); // la route renvoie { message, submission }
         setSubmitting(false);
       } else {
         setSubmitting(false);
@@ -326,6 +339,22 @@ export default function StudentHome() {
             )}
           </div>
 
+          {!result && (
+            <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              {consentWebcam && (
+                <video ref={proctor.videoRef} muted playsInline className="h-24 w-32 rounded-lg bg-slate-900 object-cover" style={{ transform: 'scaleX(-1)' }} />
+              )}
+              <div className="text-sm text-slate-600">
+                <p className="font-bold text-slate-800">Surveillance ExamGuard AI active</p>
+                <p>
+                  Webcam :{' '}
+                  {{ off: 'désactivée (score navigateur seul)', loading: 'démarrage…', on: `active — ${proctor.frameCount} relevés d'indicateurs`, denied: 'accès refusé', error: 'indisponible' }[proctor.webcamStatus]}
+                </p>
+                <p className="text-xs text-slate-400">Seuls des indicateurs (positions, temps, compteurs) sont envoyés, jamais d&apos;image ni de vidéo. Un score n&apos;est pas une preuve : l&apos;enseignant décide.</p>
+              </div>
+            </div>
+          )}
+
           {result ? (
             <div className="rounded-2xl border border-emerald-200 bg-white p-8 text-center shadow-sm space-y-4">
               <h3 className="text-2xl font-black text-slate-900">Exam submitted</h3>
@@ -343,7 +372,12 @@ export default function StudentHome() {
                 const label = q.text || q.content || q.prompt || '';
                 const isEssay = q.type === 'ESSAY' || !q.options || q.options.length === 0;
                 return (
-                  <div key={q.id} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-3">
+                  <div
+                    key={q.id}
+                    onPointerDownCapture={() => proctor.markActive(q.id)}
+                    onFocusCapture={() => proctor.markActive(q.id)}
+                    className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-3"
+                  >
                     <p className="font-bold text-slate-900">
                       {index + 1}. {label}
                     </p>
@@ -399,6 +433,40 @@ export default function StudentHome() {
 
   return (
     <div className="flex h-screen bg-slate-50">
+      {pendingExamId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" role="dialog" aria-modal="true" aria-labelledby="consent-title">
+          <div className="w-full max-w-lg space-y-4 rounded-2xl bg-white p-6 shadow-xl">
+            <h3 id="consent-title" className="text-xl font-black text-slate-900">Surveillance de l&apos;examen</h3>
+            <p className="text-sm text-slate-600">
+              Pendant cet examen, ExamGuard AI mesure le temps passé sur chaque question et compte certains événements du
+              navigateur (changement d&apos;onglet, copier-coller). Si vous l&apos;acceptez, la webcam est analysée{' '}
+              <strong>dans votre navigateur</strong> : seuls des indicateurs (position du visage, des mains, présence d&apos;un
+              téléphone) sont envoyés, jamais d&apos;image ni de vidéo.
+            </p>
+            <p className="text-sm text-slate-600">
+              Le score produit n&apos;est pas une preuve : votre enseignant examine chaque alerte et décide.
+            </p>
+            <label className="flex items-start gap-3 text-sm text-slate-800">
+              <input type="checkbox" className="mt-1" checked={consentAccepted} onChange={(e) => setConsentAccepted(e.target.checked)} />
+              <span>J&apos;ai lu ces informations et j&apos;accepte la surveillance de cet examen.</span>
+            </label>
+            <label className="flex items-start gap-3 text-sm text-slate-800">
+              <input type="checkbox" className="mt-1" checked={consentWebcam} onChange={(e) => setConsentWebcam(e.target.checked)} />
+              <span>Activer la webcam (facultatif ; sans webcam, seul le score navigateur est calculé).</span>
+            </label>
+            <div className="flex justify-end gap-3 pt-2">
+              <button onClick={() => setPendingExamId(null)} className="rounded-xl border border-slate-300 px-5 py-2.5 font-semibold text-slate-700 hover:bg-slate-50">Annuler</button>
+              <button
+                disabled={!consentAccepted}
+                onClick={() => { const id = pendingExamId; setPendingExamId(null); if (id) handleStartExam(id); }}
+                className="rounded-xl bg-blue-600 px-5 py-2.5 font-bold text-white hover:bg-blue-700 disabled:opacity-40"
+              >
+                Commencer l&apos;examen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <aside className="w-64 border-r border-slate-200 bg-white shrink-0 flex flex-col">
         <div className="p-6">
           <div className="flex items-center gap-3">
@@ -751,7 +819,7 @@ export default function StudentHome() {
                       <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
                         <span className="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">Ready</span>
                         <button
-                          onClick={() => handleStartExam(exam.id)}
+                          onClick={() => { setPendingExamId(exam.id); setConsentAccepted(false); }}
                           className="rounded-xl bg-blue-600 px-5 py-2.5 font-bold text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all"
                         >
                           {t.startExam}

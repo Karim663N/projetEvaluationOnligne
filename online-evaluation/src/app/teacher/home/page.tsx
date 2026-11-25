@@ -172,6 +172,9 @@ export default function TeacherHome() {
             <button onClick={() => router.push('/teacher/classes')} className="w-full text-left rounded-xl px-4 py-3 hover:bg-slate-50 text-slate-600 font-semibold transition-all">
               🏛️ My Classes
             </button>
+            <button onClick={() => router.push('/teacher/surveillance')} className="w-full text-left rounded-xl px-4 py-3 hover:bg-slate-50 text-slate-600 font-semibold transition-all">
+              🛡️ Surveillance (ExamGuard AI)
+            </button>
             <button onClick={() => router.push('/teacher/grading')} className="w-full text-left rounded-xl px-4 py-3 hover:bg-slate-50 text-slate-600 font-semibold transition-all">
               ✍️ Grading Center
             </button>
