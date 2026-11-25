@@ -1,23 +1,35 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
 import type { ClassView, ExamView, StudentProfileView } from '@/lib/types';
-import { translations, Language } from '@/lib/i18n';
+import { translations } from '@/lib/i18n';
+import { useLang } from '@/lib/use-lang';
 import { useRoleGuard } from '@/lib/use-role-guard';
 import ExamRunner, { type RunnerExam, type SavedAnswer } from '@/components/exam/ExamRunner';
+import AppShell from '@/components/shell/AppShell';
+import { Icon } from '@/components/ui/Icon';
+import { Avatar, EmptyState, IconBubble, PageHeader, ProgressRing, StatCard } from '@/components/ui/kit';
+
+type Tab = 'exams' | 'profile' | 'classes' | 'cv';
+type ExamFilter = 'all' | 'todo' | 'progress' | 'done';
+
+const examState = (exam: ExamView): Exclude<ExamFilter, 'all'> => {
+  const s = exam.submissions?.[0];
+  return !s ? 'todo' : s.status === 'IN_PROGRESS' ? 'progress' : 'done';
+};
 
 export default function StudentHome() {
   useRoleGuard('STUDENT');
-  const router = useRouter();
-  const [lang, setLang] = useState<Language>('en');
+  const [lang] = useLang();
   const t = translations[lang];
 
   const [exams, setExams] = useState<ExamView[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'exams' | 'profile' | 'classes' | 'cv'>('exams');
+  const [activeTab, setActiveTab] = useState<Tab>('exams');
+  const [filter, setFilter] = useState<ExamFilter>('all');
+  const [query, setQuery] = useState('');
 
-  // Exam taking (ecran : components/exam/ExamRunner.tsx)
+  // Passage d'examen (ecran : components/exam/ExamRunner.tsx)
   const [activeExam, setActiveExam] = useState<ExamView | null>(null);
   const [attemptInfo, setAttemptInfo] = useState<{ expiresAt: string; answers: SavedAnswer[] } | null>(null);
 
@@ -31,7 +43,7 @@ export default function StudentHome() {
   const [joinCode, setJoinCode] = useState('');
   const [classMessage, setClassMessage] = useState('');
 
-  // Profile
+  // Profil
   const [profileData, setProfileData] = useState<StudentProfileView>({ badges: [], certificates: [], submissions: [] });
   const [profileName, setProfileName] = useState('');
   const [profileEmail, setProfileEmail] = useState('');
@@ -52,14 +64,14 @@ export default function StudentHome() {
     fetchExams();
     fetchProfile();
     fetchClasses();
-    const savedLang = localStorage.getItem('app_lang') as Language;
-    if (savedLang && translations[savedLang]) setLang(savedLang);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // lien direct vers un onglet depuis une autre page : /student/home?tab=classes
+    const tab = new URLSearchParams(window.location.search).get('tab');
+    if (tab === 'classes' || tab === 'cv' || tab === 'profile') setActiveTab(tab);
   }, []);
 
-  const changeLanguage = (newLang: Language) => {
-    setLang(newLang);
-    localStorage.setItem('app_lang', newLang);
+  const selectTab = (key: string) => {
+    setActiveTab(key as Tab);
+    window.history.replaceState(null, '', key === 'exams' ? '/student/home' : `/student/home?tab=${key}`);
   };
 
   const fetchExams = async () => {
@@ -87,23 +99,12 @@ export default function StudentHome() {
   const handleJoinClass = async (e: React.FormEvent) => {
     e.preventDefault();
     setClassMessage('');
-    const res = await fetch('/api/classes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ joinCode }),
-    });
+    const res = await fetch('/api/classes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ joinCode }) });
     const data = await res.json();
-    setClassMessage(
-      res.ok
-        ? data.enrollment.status === 'APPROVED'
-          ? 'You are already enrolled in this class.'
-          : 'Join request sent. Your teacher will review it.'
-        : data.error || 'Could not join class'
-    );
-    if (res.ok) {
-      setJoinCode('');
-      fetchClasses();
-    }
+    setClassMessage(res.ok
+      ? data.enrollment.status === 'APPROVED' ? 'Vous êtes déjà inscrit dans cette classe.' : 'Demande envoyée. Votre enseignant va l’examiner.'
+      : data.error || 'Impossible de rejoindre la classe');
+    if (res.ok) { setJoinCode(''); fetchClasses(); }
   };
 
   const fetchProfile = async () => {
@@ -129,7 +130,7 @@ export default function StudentHome() {
     form.set('file', file);
     const res = await fetch('/api/user/avatar', { method: 'POST', body: form });
     const data = await res.json();
-    setProfileUploadMessage(res.ok ? 'Profile picture uploaded.' : data.error || 'Could not upload profile picture');
+    setProfileUploadMessage(res.ok ? 'Photo de profil mise à jour.' : data.error || 'Import de la photo impossible');
     if (res.ok) setAvatarUrl(data.avatarUrl);
   };
 
@@ -141,20 +142,18 @@ export default function StudentHome() {
       const res = await fetch('/api/student/cv', { method: 'POST', body: form });
       const data = await res.json();
       if (res.ok) {
-        setProfileUploadMessage(
-          data.warning === 'no_text_extracted'
-            ? 'CV uploaded, but no text could be extracted (scanned PDF?). AI analysis needs a text-based PDF.'
-            : 'CV uploaded successfully.'
-        );
+        setProfileUploadMessage(data.warning === 'no_text_extracted'
+          ? 'CV importé, mais aucun texte n’a pu être extrait (PDF scanné ?). L’analyse IA nécessite un PDF texte.'
+          : 'CV importé avec succès.');
         setCvUrl(data.cvUrl);
         setCvAnalysis(null);
         setCvError(null);
       } else {
-        setProfileUploadMessage(data.error || 'Could not upload CV');
+        setProfileUploadMessage(data.error || 'Import du CV impossible');
       }
     } catch (err) {
       console.error(err);
-      setProfileUploadMessage('Could not upload CV');
+      setProfileUploadMessage('Import du CV impossible');
     }
   };
 
@@ -163,26 +162,18 @@ export default function StudentHome() {
     setCvError(null);
     setCvAnalysis(null);
     setCopyStatus('idle');
-
     let message = t.generalError;
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
         const res = await fetch('/api/student/cv/enhance', { method: 'POST' });
         const data = await res.json();
-        if (res.ok) {
-          setCvAnalysis(data.text);
-          setAnalyzingCv(false);
-          return;
-        }
+        if (res.ok) { setCvAnalysis(data.text); setAnalyzingCv(false); return; }
         message = data.error || t.generalError;
-        // Client errors (no CV, unreadable PDF...) will not succeed on retry
-        if (res.status < 500) break;
+        if (res.status < 500) break; // erreurs client (pas de CV, PDF illisible…) : inutile de reessayer
       } catch (err: unknown) {
         message = (err as Error).message || t.generalError;
       }
-      if (attempt < 3) {
-        await new Promise((r) => setTimeout(r, Math.pow(2, attempt) * 1000));
-      }
+      if (attempt < 3) await new Promise((r) => setTimeout(r, Math.pow(2, attempt) * 1000));
     }
     setCvError(message);
     setAnalyzingCv(false);
@@ -202,27 +193,19 @@ export default function StudentHome() {
     e.preventDefault();
     setProfileMessage('');
     const res = await fetch('/api/student/profile', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: profileName, email: profileEmail, avatarUrl, currentPassword, newPassword }),
     });
     const data = await res.json();
-    setProfileMessage(res.ok ? 'Profile updated.' : data.error || 'Could not update profile');
-    if (res.ok) {
-      setProfileData({ ...profileData, user: data.user });
-      setCurrentPassword('');
-      setNewPassword('');
-    }
+    setProfileMessage(res.ok ? 'Profil enregistré.' : data.error || 'Enregistrement du profil impossible');
+    if (res.ok) { setProfileData({ ...profileData, user: data.user }); setCurrentPassword(''); setNewPassword(''); }
   };
 
   const handleStartExam = async (examId: string) => {
     try {
       const attemptRes = await fetch(`/api/exams/${examId}/attempt`);
       const attemptData = await attemptRes.json();
-      if (!attemptRes.ok) {
-        alert(attemptData.error || 'Could not start the exam');
-        return;
-      }
+      if (!attemptRes.ok) { alert(attemptData.error || 'Impossible de démarrer l’examen'); return; }
       const res = await fetch(`/api/exams/${examId}`);
       const data = await res.json();
       if (res.ok) {
@@ -242,16 +225,25 @@ export default function StudentHome() {
     fetchProfile();
   };
 
-  const handleLogout = async () => {
-    try {
-      await fetch('/api/auth/logout', { method: 'POST' });
-      router.push('/login');
-    } catch (err) {
-      console.error(err);
-    }
-  };
+  const openConsent = (examId: string) => { setPendingExamId(examId); setConsentAccepted(false); setConsentWebcam(false); };
 
-  // ---------- Exam taking screen ----------
+  // ---------- indicateurs ----------
+  const graded = profileData.submissions.filter((s) => s.status === 'GRADED' && s.totalScore > 0);
+  const average = graded.length ? graded.reduce((sum, s) => sum + s.score / s.totalScore, 0) / graded.length : null;
+  const counts = useMemo(() => ({
+    todo: exams.filter((e) => examState(e) === 'todo').length,
+    progress: exams.filter((e) => examState(e) === 'progress').length,
+    done: exams.filter((e) => examState(e) === 'done').length,
+  }), [exams]);
+  const nextExam = exams.find((e) => examState(e) === 'progress') ?? exams.find((e) => examState(e) === 'todo');
+  const shownExams = exams
+    .filter((e) => filter === 'all' || examState(e) === filter)
+    .filter((e) => !query.trim() || `${e.title} ${e.description ?? ''}`.toLowerCase().includes(query.trim().toLowerCase()));
+  const firstName = (profileData.user?.name || profileName || '').split(' ')[0];
+  const hour = new Date().getHours();
+  const greeting = hour < 5 || hour >= 18 ? 'Bonsoir' : 'Bonjour';
+
+  // ---------- ecran d'examen ----------
   if (activeExam && attemptInfo) {
     return (
       <ExamRunner
@@ -264,429 +256,299 @@ export default function StudentHome() {
     );
   }
 
-  // ---------- Main portal ----------
-  const tabClass = (tab: typeof activeTab) =>
-    `w-full text-left rounded-xl px-4 py-3 font-semibold transition-all ${
-      activeTab === tab ? 'bg-blue-50 text-blue-600 shadow-sm' : 'hover:bg-slate-50 text-slate-600'
-    }`;
-
   return (
-    <div className="flex h-screen bg-slate-50">
+    <AppShell role="STUDENT" active={activeTab} onSelect={selectTab}>
       {pendingExamId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" role="dialog" aria-modal="true" aria-labelledby="consent-title">
-          <div className="w-full max-w-lg space-y-4 rounded-2xl bg-white p-6 shadow-xl">
-            <h3 id="consent-title" className="text-xl font-black text-slate-900">Surveillance de l&apos;examen</h3>
-            <p className="text-sm text-slate-600">
-              Pendant cet examen, ExamGuard AI mesure le temps passé sur chaque question et compte certains événements du
-              navigateur (changement d&apos;onglet, copier-coller). Si vous l&apos;acceptez, la webcam est analysée{' '}
-              <strong>dans votre navigateur</strong> : seuls des indicateurs (position du visage, des mains, présence d&apos;un
-              téléphone) sont envoyés, jamais d&apos;image ni de vidéo.
-            </p>
-            <p className="text-sm text-slate-600">
-              Le score produit n&apos;est pas une preuve : votre enseignant examine chaque alerte et décide.
-            </p>
-            <label className="flex items-start gap-3 text-sm text-slate-800">
-              <input type="checkbox" className="mt-1" checked={consentAccepted} onChange={(e) => setConsentAccepted(e.target.checked)} />
-              <span>J&apos;ai lu ces informations et j&apos;accepte la surveillance de cet examen.</span>
-            </label>
-            <label className="flex items-start gap-3 text-sm text-slate-800">
-              <input type="checkbox" className="mt-1" checked={consentWebcam} onChange={(e) => setConsentWebcam(e.target.checked)} />
-              <span>Activer la webcam (facultatif ; sans webcam, seul le score navigateur est calculé).</span>
-            </label>
-            <div className="flex justify-end gap-3 pt-2">
-              <button onClick={() => setPendingExamId(null)} className="rounded-xl border border-slate-300 px-5 py-2.5 font-semibold text-slate-700 hover:bg-slate-50">Annuler</button>
-              <button
-                disabled={!consentAccepted}
-                onClick={() => { const id = pendingExamId; setPendingExamId(null); if (id) handleStartExam(id); }}
-                className="rounded-xl bg-blue-600 px-5 py-2.5 font-bold text-white hover:bg-blue-700 disabled:opacity-40"
-              >
-                Commencer l&apos;examen
+        <div className="eg-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="consent-title">
+          <div className="eg-modal max-w-xl">
+            <div className="flex items-start gap-4">
+              <IconBubble icon="shield" />
+              <div>
+                <h3 id="consent-title" className="text-lg font-bold text-slate-900">Surveillance de l&apos;examen</h3>
+                <p className="mt-1 text-sm text-slate-500">Lisez ces informations avant de commencer.</p>
+              </div>
+            </div>
+            <ul className="mt-5 space-y-3 text-sm text-slate-600">
+              <li className="flex gap-3"><Icon name="clock" className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" />ExamGuard AI mesure le temps passé sur chaque question et compte certains événements du navigateur (changement d&apos;onglet, copier-coller).</li>
+              <li className="flex gap-3"><Icon name="camera" className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" /><span>Si vous l&apos;acceptez, la webcam est analysée <strong>dans votre navigateur</strong> : seuls des indicateurs (visage, mains, téléphone) sont envoyés, jamais d&apos;image ni de vidéo.</span></li>
+              <li className="flex gap-3"><Icon name="user" className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" />Le score produit n&apos;est pas une preuve : votre enseignant examine chaque alerte et décide.</li>
+            </ul>
+            <div className="mt-6 space-y-2.5">
+              <label className={`flex cursor-pointer items-start gap-3 rounded-xl p-3 text-sm ring-1 transition ${consentAccepted ? 'bg-brand-50 ring-brand-300' : 'ring-slate-200 hover:bg-slate-50'}`}>
+                <input type="checkbox" className="mt-0.5 h-4 w-4 accent-brand-600" checked={consentAccepted} onChange={(e) => setConsentAccepted(e.target.checked)} />
+                <span className="text-slate-800">J&apos;ai lu ces informations et j&apos;accepte la surveillance de cet examen. <span className="text-rose-600">*</span></span>
+              </label>
+              <label className={`flex cursor-pointer items-start gap-3 rounded-xl p-3 text-sm ring-1 transition ${consentWebcam ? 'bg-brand-50 ring-brand-300' : 'ring-slate-200 hover:bg-slate-50'}`}>
+                <input type="checkbox" className="mt-0.5 h-4 w-4 accent-brand-600" checked={consentWebcam} onChange={(e) => setConsentWebcam(e.target.checked)} />
+                <span className="text-slate-800">Activer la webcam <span className="text-slate-500">(facultatif ; sans webcam, seul le score navigateur est calculé)</span></span>
+              </label>
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <button onClick={() => setPendingExamId(null)} className="eg-btn eg-btn-secondary">Annuler</button>
+              <button disabled={!consentAccepted} onClick={() => { const id = pendingExamId; setPendingExamId(null); if (id) handleStartExam(id); }} className="eg-btn eg-btn-primary">
+                Commencer l&apos;examen <Icon name="arrowRight" className="h-4 w-4" />
               </button>
             </div>
           </div>
         </div>
       )}
-      <aside className="w-64 border-r border-slate-200 bg-white shrink-0 flex flex-col">
-        <div className="p-6">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-xl">ITBS</div>
-            <span className="text-xl font-black text-slate-900">StudentPortal</span>
-          </div>
-          <p className="text-xs text-slate-500 mt-2">Online Evaluation System</p>
-        </div>
-        <nav className="flex-1 px-4 space-y-2">
-          <button onClick={() => setActiveTab('exams')} className={tabClass('exams')}>📝 {t.availableExams}</button>
-          <button onClick={() => setActiveTab('classes')} className={tabClass('classes')}>🏫 {t.myClasses}</button>
-          <button onClick={() => setActiveTab('profile')} className={tabClass('profile')}>👤 Manage Profile & Achievements</button>
-          <button onClick={() => setActiveTab('cv')} className={tabClass('cv')}>📄 {t.manageMyCV}</button>
-        </nav>
-        <div className="pt-6 border-t border-slate-100">
-          <button onClick={handleLogout} className="w-full text-left rounded-xl px-4 py-2.5 font-semibold text-rose-600 hover:bg-rose-50 transition-colors">
-            🚪 {t.logout}
-          </button>
-        </div>
-      </aside>
 
-      <main className="flex-1 p-10 overflow-y-auto">
-        {activeTab === 'classes' ? (
-          <section className="max-w-4xl space-y-6">
-            <div>
-              <h2 className="text-3xl font-black text-slate-900">{t.myClasses}</h2>
-              <p className="mt-1 text-slate-500">Join virtual classrooms using invite codes provided by your professors.</p>
+      {activeTab === 'classes' ? (
+        <section>
+          <PageHeader eyebrow="Apprentissage" title={t.myClasses} subtitle="Rejoignez les classes de vos enseignants avec leur code d’invitation." />
+          <form onSubmit={handleJoinClass} className="eg-card flex flex-col gap-3 p-5 sm:flex-row sm:items-center">
+            <IconBubble icon="key" className="hidden h-11 w-11 sm:grid" />
+            <div className="flex-1">
+              <label htmlFor="join" className="sr-only">{t.enterJoinCode}</label>
+              <input id="join" value={joinCode} onChange={(e) => setJoinCode(e.target.value.toUpperCase())} required placeholder={t.enterJoinCode} className="eg-input font-mono uppercase tracking-[0.3em]" />
             </div>
-            <form onSubmit={handleJoinClass} className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:flex-row">
-              <input
-                value={joinCode}
-                onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                required
-                placeholder={t.enterJoinCode}
-                className="flex-1 rounded-xl border border-slate-300 px-4 py-3 uppercase tracking-widest font-mono focus:outline-none focus:ring-2 focus:ring-blue-600"
-              />
-              <button className="rounded-xl bg-blue-600 px-6 py-3 font-bold text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all">
-                {t.requestToJoin}
-              </button>
-            </form>
-            {classMessage && <div className="p-4 rounded-xl bg-blue-50 border border-blue-200 text-blue-800 font-medium">{classMessage}</div>}
-            <div className="grid gap-6 sm:grid-cols-2">
-              {classes.map((c) => (
-                <article key={c.id} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col justify-between">
-                  <div>
-                    <h3 className="text-xl font-bold text-slate-900">{c.name}</h3>
-                    <p className="mt-1 text-sm text-slate-500">
-                      {t.teacher}: <span className="font-semibold text-slate-700">{c.teacher?.name || '—'}</span>
-                    </p>
-                    <p className="mt-2 text-xs text-slate-400">{c.description || 'No description provided.'}</p>
+            <button className="eg-btn eg-btn-primary"><Icon name="plus" className="h-4 w-4" />{t.requestToJoin}</button>
+          </form>
+          {classMessage && <div className="eg-alert eg-alert-info mt-4">{classMessage}</div>}
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {classes.length === 0 && <div className="sm:col-span-2 xl:col-span-3"><EmptyState icon="users" title="Aucune classe pour l’instant" text="Demandez le code de la classe à votre enseignant puis saisissez-le ci-dessus." /></div>}
+            {classes.map((c) => {
+              const st = c.enrollments?.[0]?.status;
+              return (
+                <article key={c.id} className="eg-card eg-card-hover flex flex-col p-5">
+                  <div className="flex items-start gap-3">
+                    <IconBubble icon="cap" tone="violet" />
+                    <div className="min-w-0">
+                      <h3 className="truncate font-semibold text-slate-900">{c.name}</h3>
+                      <p className="text-sm text-slate-500">{t.teacher} : <span className="font-medium text-slate-700">{c.teacher?.name || '—'}</span></p>
+                    </div>
                   </div>
-                  <div className="mt-6 flex items-center justify-between border-t border-slate-100 pt-4">
-                    <span className="text-xs font-semibold text-slate-500">{t.status}:</span>
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs font-bold ${
-                        c.enrollments?.[0]?.status === 'APPROVED'
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : c.enrollments?.[0]?.status === 'REJECTED'
-                          ? 'bg-rose-100 text-rose-800'
-                          : 'bg-amber-100 text-amber-800'
-                      }`}
-                    >
-                      {c.enrollments?.[0]?.status === 'APPROVED'
-                        ? t.enrolled
-                        : c.enrollments?.[0]?.status === 'REJECTED'
-                        ? t.requestRejected
-                        : t.pendingApproval}
+                  <p className="mt-3 line-clamp-2 text-sm text-slate-500">{c.description || 'Pas de description.'}</p>
+                  <div className="mt-auto flex items-center justify-between border-t border-slate-100 pt-4 text-xs">
+                    <span className="text-slate-500">{t.status}</span>
+                    <span className={`eg-badge ${st === 'APPROVED' ? 'eg-badge-green' : st === 'REJECTED' ? 'eg-badge-red' : 'eg-badge-amber'}`}>
+                      {st === 'APPROVED' ? t.enrolled : st === 'REJECTED' ? t.requestRejected : t.pendingApproval}
                     </span>
                   </div>
                 </article>
-              ))}
-            </div>
-          </section>
-        ) : activeTab === 'cv' ? (
-          <section className="max-w-5xl space-y-8">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-3xl font-black text-slate-900">{t.manageMyCV}</h2>
-                <p className="mt-1 text-slate-500">{t.uploadCVDesc}</p>
-              </div>
-              <button
-                onClick={handleEnhanceCv}
-                disabled={analyzingCv || !cvUrl}
-                className={`rounded-xl bg-indigo-600 px-6 py-3 font-bold text-white shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 disabled:opacity-50 disabled:hover:bg-indigo-600 transition-all flex items-center gap-3 ${analyzingCv ? 'animate-pulse' : ''}`}
-              >
-                {analyzingCv ? (
-                  <>
-                    <svg className="w-5 h-5 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    {t.enhancing}
-                  </>
-                ) : (
-                  <>✨ {t.enhanceCv}</>
-                )}
+              );
+            })}
+          </div>
+        </section>
+      ) : activeTab === 'cv' ? (
+        <section>
+          <PageHeader eyebrow="Carrière" title={t.manageMyCV} subtitle={t.uploadCVDesc}
+            actions={
+              <button onClick={handleEnhanceCv} disabled={analyzingCv || !cvUrl} className={`eg-btn eg-btn-primary ${analyzingCv ? 'animate-pulse' : ''}`}>
+                {analyzingCv ? <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />{t.enhancing}</> : <><Icon name="sparkles" className="h-4 w-4" />Analyse IA du CV</>}
               </button>
-            </div>
-
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {/* Preview */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col justify-between">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{t.cvPreview}</span>
-                  <span className="p-2 rounded-xl text-lg text-indigo-600 bg-indigo-50">📄</span>
-                </div>
-                <div className="flex-1 min-h-[300px] rounded-xl border border-slate-200 bg-white overflow-hidden flex items-center justify-center">
-                  {cvUrl ? (
-                    <iframe src={cvUrl} className="w-full h-full min-h-[300px]" title="CV Preview" />
-                  ) : (
-                    <div className="p-8 text-center">
-                      <svg className="w-8 h-8 text-slate-400 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                      </svg>
-                      <p className="text-sm font-medium text-slate-500">{t.noCV}</p>
-                      <p className="text-xs text-slate-400 mt-0.5">{t.uploadCVDesc}</p>
-                    </div>
-                  )}
-                </div>
+            } />
+          <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
+            <div className="eg-card overflow-hidden">
+              <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5">
+                <p className="eg-h2">{t.cvPreview}</p>
+                <span className={`eg-badge ${cvUrl ? 'eg-badge-green' : 'eg-badge-slate'}`}>{cvUrl ? 'Importé' : 'Non importé'}</span>
               </div>
-
-              {/* Status */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col justify-between">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Status</span>
-                  <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${cvUrl ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'}`}>
-                    {cvUrl ? 'Uploaded' : 'Not uploaded'}
-                  </span>
-                </div>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-slate-500">CV Analysis</span>
-                    <span className={`font-medium ${cvAnalysis ? 'text-emerald-600' : 'text-slate-400'}`}>
-                      {cvAnalysis ? 'Completed' : 'Pending'}
-                    </span>
+              <div className="grid min-h-[420px] place-items-center bg-slate-50">
+                {cvUrl ? <iframe src={cvUrl} className="h-[480px] w-full" title="Aperçu du CV" /> : (
+                  <div className="p-8 text-center">
+                    <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-white text-slate-400 ring-1 ring-slate-200"><Icon name="exam" /></span>
+                    <p className="mt-3 text-sm font-medium text-slate-600">{t.noCV}</p>
+                    <p className="text-xs text-slate-400">{t.uploadCVDesc}</p>
                   </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-slate-500">AI Model</span>
-                    <span className="font-medium text-indigo-600">gemini-2.5-flash</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Errors */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col justify-between">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{t.errorTitle}</span>
-                </div>
-                <div className="h-[300px] rounded-xl border border-slate-200 bg-white overflow-hidden flex items-center justify-center">
-                  {cvError ? (
-                    <div className="p-6 text-center text-red-600">
-                      <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-3">⚠</div>
-                      <p className="text-sm font-medium">{cvError}</p>
-                      <button onClick={handleEnhanceCv} className="mt-4 text-xs font-bold text-indigo-600 hover:underline">
-                        {t.retry}
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="text-center">
-                      <p className="text-sm text-slate-500">No errors yet</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Upload */}
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <label className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
-                {t.uploadCV}
-                <span className="text-xs text-slate-400 font-normal">PDF only • Max 10MB</span>
-              </label>
-              <input
-                type="file"
-                accept="application/pdf,.pdf"
-                onChange={(e) => uploadCv(e.target.files?.[0])}
-                className="block w-full rounded-xl border-2 border-dashed border-slate-300 px-6 py-8 text-center text-slate-500 hover:border-indigo-300 hover:bg-indigo-50 transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-              {profileUploadMessage && <p className="mt-3 text-sm font-bold text-emerald-600">{profileUploadMessage}</p>}
-            </div>
-
-            {/* Analysis result */}
-            {cvAnalysis && (
-              <div className="rounded-2xl border border-indigo-100 bg-white p-6 shadow-sm">
-                <div className="mb-4 flex items-center justify-between">
-                  <h3 className="text-xl font-bold text-slate-900">✨ AI Recommendations</h3>
-                  <button
-                    onClick={() => copyToClipboard(cvAnalysis)}
-                    className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all"
-                  >
-                    {copyStatus === 'copied' ? 'Copied ✓' : 'Copy'}
-                  </button>
-                </div>
-                <div className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">{cvAnalysis}</div>
-              </div>
-            )}
-
-            {cvError && !cvAnalysis && (
-              <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-800 text-sm font-medium">{cvError}</div>
-            )}
-          </section>
-        ) : activeTab === 'profile' ? (
-          <section className="max-w-4xl space-y-8">
-            <div>
-              <h2 className="text-3xl font-black text-slate-900">Manage Profile & Achievements</h2>
-              <p className="mt-1 text-slate-500">Update your personal information and review your badges and certificates.</p>
-            </div>
-
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-6">
-              <div className="flex items-center gap-4">
-                {avatarUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={avatarUrl} alt="" className="h-20 w-20 rounded-full object-cover border border-slate-200" />
-                ) : (
-                  <div className="h-20 w-20 rounded-full bg-slate-100 flex items-center justify-center text-3xl">👤</div>
                 )}
-                <div>
-                  <label className="text-sm font-semibold text-slate-700 block mb-1">Profile picture</label>
-                  <input type="file" accept="image/*" onChange={(e) => uploadAvatar(e.target.files?.[0])} className="text-sm text-slate-500" />
-                  {profileUploadMessage && <p className="mt-2 text-xs font-bold text-emerald-600">{profileUploadMessage}</p>}
-                </div>
               </div>
-
-              <form onSubmit={handleSaveProfile} className="grid gap-4 sm:grid-cols-2">
-                <input value={profileName} onChange={(e) => setProfileName(e.target.value)} required placeholder="Full name" className="rounded-xl border border-slate-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-600" />
-                <input value={profileEmail} onChange={(e) => setProfileEmail(e.target.value)} required type="email" placeholder="Email" className="rounded-xl border border-slate-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-600" />
-                <input value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} type="password" placeholder="Current password" className="rounded-xl border border-slate-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-600" />
-                <input value={newPassword} onChange={(e) => setNewPassword(e.target.value)} type="password" placeholder="New password" className="rounded-xl border border-slate-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-600" />
-                <div className="sm:col-span-2 flex items-center gap-4">
-                  <button className="rounded-xl bg-blue-600 px-6 py-3 font-bold text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all">Save profile</button>
-                  {profileMessage && <span className="text-sm font-bold text-emerald-600">{profileMessage}</span>}
-                </div>
-              </form>
             </div>
+            <div className="space-y-5">
+              <div className="eg-card p-5">
+                <p className="eg-h2">{t.uploadCV}</p>
+                <p className="eg-hint mb-3">PDF uniquement · 10 Mo maximum</p>
+                <input type="file" accept="application/pdf,.pdf" onChange={(e) => uploadCv(e.target.files?.[0])} className="eg-file" />
+                {profileUploadMessage && <p className="mt-3 text-sm font-medium text-emerald-700">{profileUploadMessage}</p>}
+              </div>
+              <div className="eg-card space-y-3 p-5 text-sm">
+                <p className="eg-h2">État de l’analyse</p>
+                <div className="flex justify-between"><span className="text-slate-500">Analyse du CV</span><span className={`font-semibold ${cvAnalysis ? 'text-emerald-600' : 'text-slate-400'}`}>{cvAnalysis ? 'Terminée' : 'En attente'}</span></div>
+                <div className="flex justify-between"><span className="text-slate-500">Modèle IA</span><span className="font-mono text-xs font-semibold text-brand-600">gemini-2.5-flash</span></div>
+              </div>
+              {cvError && (
+                <div className="eg-alert eg-alert-error">
+                  <p className="font-semibold">{t.errorTitle}</p>
+                  <p className="mt-1 font-normal">{cvError}</p>
+                  <button onClick={handleEnhanceCv} className="mt-2 text-xs font-bold underline">{t.retry}</button>
+                </div>
+              )}
+            </div>
+          </div>
+          {cvAnalysis && (
+            <div className="eg-card mt-5 p-6">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-900"><Icon name="sparkles" className="h-5 w-5 text-brand-600" />Recommandations IA</h3>
+                <button onClick={() => copyToClipboard(cvAnalysis)} className="eg-btn eg-btn-secondary eg-btn-sm"><Icon name="copy" className="h-3.5 w-3.5" />{copyStatus === 'copied' ? t.copied : 'Copier'}</button>
+              </div>
+              <div className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">{cvAnalysis}</div>
+            </div>
+          )}
+        </section>
+      ) : activeTab === 'profile' ? (
+        <section>
+          <PageHeader eyebrow="Compte" title="Profil & réussites" subtitle="Mettez à jour vos informations et retrouvez vos badges et certificats." />
+          <div className="grid gap-5 lg:grid-cols-[1fr_1.6fr]">
+            <div className="eg-card overflow-hidden">
+              <div className="h-24 eg-aurora" />
+              <div className="-mt-10 px-6 pb-6 text-center">
+                <Avatar name={profileName} src={avatarUrl || null} className="mx-auto h-20 w-20 text-2xl ring-4 ring-white" />
+                <p className="mt-3 text-lg font-semibold text-slate-900">{profileName || '—'}</p>
+                <p className="text-sm text-slate-500">{profileEmail}</p>
+                <div className="mt-5 grid grid-cols-3 gap-2 text-center">
+                  {[[counts.done, 'examens'], [profileData.badges.length, 'badges'], [profileData.certificates.length, 'certificats']].map(([v, k]) => (
+                    <div key={k as string} className="rounded-xl bg-slate-50 py-2.5"><p className="text-lg font-bold text-slate-900">{v}</p><p className="text-[11px] text-slate-500">{k}</p></div>
+                  ))}
+                </div>
+                <label className="eg-btn eg-btn-secondary eg-btn-sm mt-5 cursor-pointer"><Icon name="upload" className="h-3.5 w-3.5" />Changer la photo
+                  <input type="file" accept="image/*" onChange={(e) => uploadAvatar(e.target.files?.[0])} className="hidden" />
+                </label>
+                {profileUploadMessage && <p className="mt-2 text-xs font-medium text-emerald-700">{profileUploadMessage}</p>}
+              </div>
+            </div>
+            <form onSubmit={handleSaveProfile} className="eg-card grid gap-4 p-6 sm:grid-cols-2">
+              <p className="eg-h2 sm:col-span-2">Informations personnelles</p>
+              <label><span className="eg-label">Nom complet</span><input value={profileName} onChange={(e) => setProfileName(e.target.value)} required className="eg-input" /></label>
+              <label><span className="eg-label">Adresse e-mail</span><input value={profileEmail} onChange={(e) => setProfileEmail(e.target.value)} required type="email" className="eg-input" /></label>
+              <p className="eg-h2 mt-2 sm:col-span-2">Sécurité</p>
+              <label><span className="eg-label">Mot de passe actuel</span><input value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} type="password" autoComplete="current-password" className="eg-input" /></label>
+              <label><span className="eg-label">Nouveau mot de passe</span><input value={newPassword} onChange={(e) => setNewPassword(e.target.value)} type="password" autoComplete="new-password" placeholder="Laisser vide pour conserver" className="eg-input" /></label>
+              <div className="flex items-center gap-3 border-t border-slate-100 pt-4 sm:col-span-2">
+                <button className="eg-btn eg-btn-primary">{t.saveProfile}</button>
+                {profileMessage && <span className="text-sm font-medium text-emerald-700">{profileMessage}</span>}
+              </div>
+            </form>
+          </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <h3 className="text-xl font-bold text-slate-900 mb-4">{t.badgesEarned}</h3>
-              {profileData.badges?.length === 0 ? (
-                <p className="text-slate-500 text-sm py-4">No badges earned yet. Take exams and achieve high scores to unlock badges!</p>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="mt-5 grid gap-5 lg:grid-cols-2">
+            <div className="eg-card p-6">
+              <p className="eg-h2 mb-4">{t.badgesEarned}</p>
+              {profileData.badges?.length === 0 ? <EmptyState icon="award" title="Aucun badge pour l’instant" text="Réussissez vos examens pour débloquer des badges." /> : (
+                <div className="grid gap-3 sm:grid-cols-2">
                   {profileData.badges?.map((b) => (
-                    <div key={b.id} className="flex items-center gap-4 p-4 border border-blue-100 rounded-2xl bg-gradient-to-br from-blue-50/50 to-indigo-50/50 shadow-sm">
-                      {b.badge.imageUrl ? (
+                    <div key={b.id} className="flex items-center gap-3 rounded-xl bg-gradient-to-br from-brand-50 to-violet-50 p-3 ring-1 ring-brand-100">
+                      {b.badge.imageUrl
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={b.badge.imageUrl} alt="" className="h-14 w-14 rounded-xl object-cover shadow-sm" />
-                      ) : (
-                        <div className="text-4xl p-2 bg-white rounded-xl shadow-sm">🏆</div>
-                      )}
-                      <div>
-                        <h4 className="font-bold text-slate-900">{b.badge.name}</h4>
-                        <p className="text-xs text-slate-500 mt-0.5">{b.badge.description}</p>
-                      </div>
+                        ? <img src={b.badge.imageUrl} alt="" className="h-12 w-12 rounded-xl object-cover" />
+                        : <IconBubble icon="award" tone="amber" className="h-12 w-12" />}
+                      <div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-900">{b.badge.name}</p><p className="line-clamp-2 text-xs text-slate-500">{b.badge.description}</p></div>
                     </div>
                   ))}
                 </div>
               )}
             </div>
-
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <h3 className="text-xl font-bold text-slate-900 mb-4">{t.certificates}</h3>
-              {profileData.certificates?.length === 0 ? (
-                <p className="text-slate-500 text-sm py-4">No certificates issued yet. Pass your exams to receive official certificates.</p>
-              ) : (
-                <div className="space-y-4">
+            <div className="eg-card p-6">
+              <p className="eg-h2 mb-4">{t.certificates}</p>
+              {profileData.certificates?.length === 0 ? <EmptyState icon="award" title="Aucun certificat pour l’instant" text="Les certificats délivrés par vos enseignants apparaîtront ici." /> : (
+                <div className="space-y-3">
                   {profileData.certificates?.map((cert) => (
-                    <div key={cert.id} className="p-4 border border-emerald-100 rounded-2xl bg-emerald-50/50 flex justify-between items-center shadow-sm">
-                      <div>
-                        <h4 className="font-bold text-slate-900">Certificate of Achievement: {cert.examTitle}</h4>
-                        <p className="text-xs font-mono text-emerald-700 mt-0.5">Credential Code: {cert.code}</p>
-                      </div>
-                      <a href={`/student/certificates/${cert.id}`} className="text-xs font-bold bg-emerald-600 text-white px-4 py-2 rounded-xl shadow-md shadow-emerald-600/20 hover:bg-emerald-700 transition-all">
-                        View / Print
-                      </a>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </section>
-        ) : (
-          <div className="max-w-6xl space-y-8">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-3xl font-black text-slate-900">{t.welcomeBack}</h2>
-                <p className="mt-1 text-slate-500">{t.learningOverview}</p>
-              </div>
-              <div className="flex items-center gap-2 bg-white border border-slate-200 p-1.5 rounded-2xl shadow-sm">
-                <span className="px-3 py-1 font-bold text-xs bg-blue-50 text-blue-600 rounded-xl">Language</span>
-                {(['en', 'fr', 'ar'] as Language[]).map((l) => (
-                  <button
-                    key={l}
-                    onClick={() => changeLanguage(l)}
-                    className={`px-3 py-1.5 rounded-xl font-bold text-xs transition-all ${lang === l ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:bg-slate-100'}`}
-                  >
-                    {l.toUpperCase()}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-              {[
-                [t.availableExams, exams.length, '📝', 'text-blue-600 bg-blue-50'],
-                [t.myClasses, classes.length, '🏫', 'text-indigo-600 bg-indigo-50'],
-                ['Completed exams', profileData.submissions.filter((s) => s.status !== 'IN_PROGRESS').length, '🏆', 'text-emerald-600 bg-emerald-50'],
-                [
-                  'Average grade',
-                  (() => {
-                    const graded = profileData.submissions.filter((s) => s.status === 'GRADED' && s.totalScore > 0);
-                    return graded.length
-                      ? `${Math.round((graded.reduce((sum, s) => sum + (s.score / s.totalScore) * 100, 0) / graded.length))}%`
-                      : '—';
-                  })(),
-                  '📊',
-                  'text-amber-600 bg-amber-50',
-                ],
-                [t.badgesEarned, profileData.badges.length, '🏅', 'text-purple-600 bg-purple-50'],
-              ].map(([label, value, icon, color]) => (
-                <div key={label as string} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col justify-between">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{label}</span>
-                    <span className={`p-2 rounded-xl text-lg ${color}`}>{icon}</span>
-                  </div>
-                  <p className="text-3xl font-black text-slate-900">{value}</p>
-                </div>
-              ))}
-            </div>
-
-            <div className="space-y-4">
-              <h3 className="text-2xl font-black text-slate-900">{t.availableExams}</h3>
-              {loading ? (
-                <div className="p-8 text-center text-slate-400">Loading exams...</div>
-              ) : exams.length === 0 ? (
-                <div className="p-12 text-center rounded-2xl border border-dashed border-slate-300 bg-white text-slate-500">
-                  No exams available right now. Join a class or check back later!
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {exams.map((exam) => (
-                    <div key={exam.id} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col justify-between hover:border-blue-300 transition-all">
-                      <div>
-                        <h4 className="text-xl font-bold text-slate-900">{exam.title}</h4>
-                        <p className="mt-2 text-sm text-slate-500 line-clamp-2">{exam.description || 'No description provided.'}</p>
-                        <div className="mt-4 flex items-center gap-4 text-xs font-semibold text-slate-400">
-                          <span>⏱ {t.duration}: {exam.duration} mins</span>
-                          <span>❓ {t.questions}: {exam._count?.questions || 0}</span>
-                        </div>
-                      </div>
-                      {(() => {
-                        const attempt = exam.submissions?.[0];
-                        if (attempt && attempt.status !== 'IN_PROGRESS') {
-                          return (
-                            <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
-                              <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full">
-                                {attempt.status === 'GRADED' ? `Terminé · ${attempt.score} / ${attempt.totalScore}` : 'Remis · en correction'}
-                              </span>
-                              <span className="text-sm font-semibold text-slate-400">Copie remise</span>
-                            </div>
-                          );
-                        }
-                        return (
-                          <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
-                            <span className={`text-xs font-bold px-3 py-1 rounded-full ${attempt ? 'text-amber-700 bg-amber-50' : 'text-blue-600 bg-blue-50'}`}>{attempt ? 'En cours' : 'Disponible'}</span>
-                            <button
-                              onClick={() => { setPendingExamId(exam.id); setConsentAccepted(false); setConsentWebcam(false); }}
-                              className="rounded-xl bg-blue-600 px-5 py-2.5 font-bold text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all"
-                            >
-                              {attempt ? 'Reprendre' : t.startExam}
-                            </button>
-                          </div>
-                        );
-                      })()}
+                    <div key={cert.id} className="flex items-center gap-3 rounded-xl p-3 ring-1 ring-emerald-100">
+                      <IconBubble icon="award" tone="green" />
+                      <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-900">{cert.examTitle}</p><p className="truncate font-mono text-[11px] text-emerald-700">{cert.code}</p></div>
+                      <a href={`/student/certificates/${cert.id}`} className="eg-btn eg-btn-secondary eg-btn-sm">Voir</a>
                     </div>
                   ))}
                 </div>
               )}
             </div>
           </div>
-        )}
-      </main>
-    </div>
+        </section>
+      ) : (
+        <section className="space-y-7">
+          {/* accueil : prochaine action */}
+          <div className="relative overflow-hidden rounded-3xl eg-aurora p-6 text-white md:p-8">
+            <div className="eg-grid-bg absolute inset-0" />
+            <div className="relative flex flex-wrap items-center justify-between gap-6">
+              <div className="max-w-xl">
+                <p className="text-sm font-medium text-slate-300">{new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+                <h1 className="mt-1 text-2xl font-bold tracking-tight md:text-3xl">{greeting}{firstName ? `, ${firstName}` : ''} 👋</h1>
+                <p className="mt-2 text-slate-300">
+                  {nextExam
+                    ? examState(nextExam) === 'progress' ? <>Vous avez un examen en cours : <strong className="text-white">{nextExam.title}</strong>.</> : <>Prochain examen disponible : <strong className="text-white">{nextExam.title}</strong>.</>
+                    : 'Aucun examen en attente. Profitez-en pour revoir vos résultats.'}
+                </p>
+                {nextExam && (
+                  <button onClick={() => openConsent(nextExam.id)} className="eg-btn eg-btn-lg mt-5 bg-white text-ink-950 hover:bg-slate-100">
+                    {examState(nextExam) === 'progress' ? 'Reprendre l’examen' : 'Commencer maintenant'} <Icon name="arrowRight" className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-4 rounded-2xl bg-white/10 p-4 ring-1 ring-white/15 backdrop-blur">
+                <ProgressRing value={average ?? 0} size={76} stroke={8} color="#22d3ee"><span className="text-white">{average == null ? '—' : `${Math.round(100 * average)}%`}</span></ProgressRing>
+                <div><p className="text-sm font-semibold">Moyenne générale</p><p className="text-xs text-slate-300">{graded.length} examen{graded.length > 1 ? 's' : ''} noté{graded.length > 1 ? 's' : ''}</p></div>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <StatCard label="À passer" value={counts.todo} icon="exam" tone="brand" hint={counts.progress ? `${counts.progress} en cours` : 'aucun en cours'} />
+            <StatCard label="Terminés" value={counts.done} icon="check" tone="green" />
+            <StatCard label={t.myClasses} value={classes.length} icon="users" tone="violet" />
+            <StatCard label={t.badgesEarned} value={profileData.badges.length} icon="award" tone="amber" hint={`${profileData.certificates.length} certificat${profileData.certificates.length > 1 ? 's' : ''}`} />
+          </div>
+
+          <div>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-lg font-semibold text-slate-900">Mes examens</h2>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="eg-segmented" role="group" aria-label="Filtrer les examens">
+                  {([['all', 'Tous', exams.length], ['todo', 'À passer', counts.todo], ['progress', 'En cours', counts.progress], ['done', 'Terminés', counts.done]] as const).map(([k, label, n]) => (
+                    <button key={k} onClick={() => setFilter(k)} aria-pressed={filter === k}>{label} <span className="ms-1 text-xs text-slate-400">{n}</span></button>
+                  ))}
+                </div>
+                <div className="relative">
+                  <Icon name="search" className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher…" className="eg-input w-48 ps-9" aria-label="Rechercher un examen" />
+                </div>
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{[0, 1, 2].map((i) => <div key={i} className="eg-card h-48 animate-pulse bg-slate-100/60" />)}</div>
+            ) : shownExams.length === 0 ? (
+              <EmptyState icon="exam" title={exams.length ? 'Aucun examen pour ce filtre' : 'Aucun examen disponible'} text={exams.length ? 'Changez de filtre ou de recherche.' : 'Rejoignez une classe ou revenez plus tard.'} />
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {shownExams.map((exam) => {
+                  const attempt = exam.submissions?.[0];
+                  const st = examState(exam);
+                  const ratio = attempt && attempt.status === 'GRADED' && attempt.totalScore > 0 ? attempt.score / attempt.totalScore : null;
+                  return (
+                    <article key={exam.id} className="eg-card eg-card-hover flex flex-col p-5">
+                      <div className="flex items-start justify-between gap-3">
+                        <IconBubble icon={st === 'done' ? 'check' : st === 'progress' ? 'clock' : 'exam'} tone={st === 'done' ? 'green' : st === 'progress' ? 'amber' : 'brand'} />
+                        <span className={`eg-badge ${st === 'done' ? (attempt?.status === 'GRADED' ? 'eg-badge-green' : 'eg-badge-slate') : st === 'progress' ? 'eg-badge-amber' : 'eg-badge-brand'}`}>
+                          {st === 'done' ? (attempt?.status === 'GRADED' ? 'Noté' : 'En correction') : st === 'progress' ? 'En cours' : 'Disponible'}
+                        </span>
+                      </div>
+                      <h3 className="mt-4 line-clamp-2 font-semibold text-slate-900">{exam.title}</h3>
+                      <p className="mt-1 line-clamp-2 text-sm text-slate-500">{exam.description || 'Pas de description.'}</p>
+                      <div className="mt-4 flex flex-wrap gap-2 text-xs text-slate-500">
+                        <span className="inline-flex items-center gap-1 rounded-lg bg-slate-50 px-2 py-1"><Icon name="clock" className="h-3.5 w-3.5" />{exam.duration} min</span>
+                        <span className="inline-flex items-center gap-1 rounded-lg bg-slate-50 px-2 py-1"><Icon name="help" className="h-3.5 w-3.5" />{exam._count?.questions || 0} questions</span>
+                      </div>
+                      <div className="mt-auto pt-5">
+                        {st === 'done' ? (
+                          ratio != null ? (
+                            <div>
+                              <div className="flex items-baseline justify-between text-sm"><span className="text-slate-500">Score</span><span className="font-semibold text-slate-900">{attempt!.score} / {attempt!.totalScore}</span></div>
+                              <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full ${ratio >= 0.5 ? 'bg-gradient-to-r from-emerald-500 to-emerald-400' : 'bg-gradient-to-r from-amber-500 to-amber-400'}`} style={{ width: `${Math.round(100 * ratio)}%` }} /></div>
+                            </div>
+                          ) : <p className="text-sm text-slate-500">Copie remise · en attente de correction</p>
+                        ) : (
+                          <button onClick={() => openConsent(exam.id)} className={`eg-btn w-full ${st === 'progress' ? 'eg-btn-soft' : 'eg-btn-primary'}`}>
+                            {st === 'progress' ? 'Reprendre' : 'Commencer'} <Icon name="arrowRight" className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+    </AppShell>
   );
 }

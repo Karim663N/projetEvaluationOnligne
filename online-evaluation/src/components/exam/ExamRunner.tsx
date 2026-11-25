@@ -197,7 +197,7 @@ export default function ExamRunner({ exam, expiresAt, savedAnswers, consentWebca
   if (view === 'result' && result) {
     const pct = result.totalScore > 0 ? Math.round((100 * result.score) / result.totalScore) : 0;
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 via-white to-blue-50 p-6">
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 via-white to-brand-50 p-6">
         <div className="w-full max-w-md space-y-6 rounded-3xl bg-white p-8 text-center shadow-xl ring-1 ring-slate-200">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-3xl text-emerald-600">✓</div>
           <div>
@@ -211,7 +211,7 @@ export default function ExamRunner({ exam, expiresAt, savedAnswers, consentWebca
               {result.status === 'GRADED' ? `Corrigée automatiquement · ${pct} %` : 'En attente de correction par l’enseignant (réponses rédigées)'}
             </p>
           </div>
-          <button onClick={onClose} className="w-full rounded-xl bg-blue-600 px-6 py-3 font-bold text-white hover:bg-blue-700">Retour au tableau de bord</button>
+          <button onClick={onClose} className="w-full rounded-xl bg-brand-600 px-6 py-3 font-bold text-white hover:bg-brand-700">Retour au tableau de bord</button>
         </div>
       </div>
     );
@@ -231,7 +231,7 @@ export default function ExamRunner({ exam, expiresAt, savedAnswers, consentWebca
           </span>
           <div className={`rounded-xl px-4 py-2 font-mono text-lg font-bold tabular-nums ${timerClass}`} role="timer" aria-label="Temps restant">{fmt(secondsLeft)}</div>
         </div>
-        <div className="h-1 bg-slate-100"><div className="h-1 bg-blue-600 transition-all" style={{ width: `${(100 * answeredCount) / Math.max(n, 1)}%` }} /></div>
+        <div className="h-1 bg-slate-100"><div className="h-1 bg-brand-600 transition-all" style={{ width: `${(100 * answeredCount) / Math.max(n, 1)}%` }} /></div>
       </header>
 
       <main className="mx-auto grid max-w-6xl gap-6 px-4 py-6 lg:grid-cols-[1fr_300px]">
@@ -240,7 +240,7 @@ export default function ExamRunner({ exam, expiresAt, savedAnswers, consentWebca
           {view === 'question' && current ? (
             <article className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200 md:p-8">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="rounded-full bg-blue-50 px-3 py-1 text-sm font-semibold text-blue-700">Question {idx + 1} sur {n}</span>
+                <span className="rounded-full bg-brand-50 px-3 py-1 text-sm font-semibold text-brand-700">Question {idx + 1} sur {n}</span>
                 <span className="text-xs font-medium text-slate-500">{TYPE_LABEL[current.questionType]} · {current.points} pt{current.points > 1 ? 's' : ''}</span>
               </div>
               <h2 className="mt-5 text-xl font-semibold leading-snug md:text-2xl">{current.text}</h2>
@@ -253,7 +253,7 @@ export default function ExamRunner({ exam, expiresAt, savedAnswers, consentWebca
                     onChange={(e) => setAnswers((p) => ({ ...p, [current.id]: { ids: [], text: e.target.value } }))}
                     rows={8}
                     placeholder="Rédigez votre réponse…"
-                    className="w-full rounded-2xl border-2 border-slate-200 px-4 py-3 focus:border-blue-600 focus:outline-none"
+                    className="w-full rounded-2xl border-2 border-slate-200 px-4 py-3 focus:border-brand-600 focus:outline-none"
                   />
                   <p className="mt-1 text-right text-xs text-slate-400">{(answers[current.id]?.text ?? '').length} caractères</p>
                 </div>
@@ -269,14 +269,14 @@ export default function ExamRunner({ exam, expiresAt, savedAnswers, consentWebca
                         role={current.questionType === 'MULTIPLE' ? 'checkbox' : 'radio'}
                         aria-checked={selected}
                         onClick={() => choose(current, o.id)}
-                        className={`group flex w-full items-center gap-4 rounded-2xl border-2 p-4 text-left transition ${selected ? 'border-blue-600 bg-blue-50 shadow-sm' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}
+                        className={`group flex w-full items-center gap-4 rounded-2xl border-2 p-4 text-left transition ${selected ? 'border-brand-600 bg-brand-50 shadow-sm' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}
                       >
-                        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-bold ${selected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200'}`}>{LETTERS[k]}</span>
+                        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-bold ${selected ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200'}`}>{LETTERS[k]}</span>
                         <span className="flex-1">
                           {o.text}
                           {o.imageUrl && <img src={o.imageUrl} alt="" className="mt-2 max-h-32 rounded-lg object-contain" />}
                         </span>
-                        {selected && <span className="text-blue-600" aria-hidden>✓</span>}
+                        {selected && <span className="text-brand-600" aria-hidden>✓</span>}
                       </button>
                     );
                   })}
@@ -292,7 +292,7 @@ export default function ExamRunner({ exam, expiresAt, savedAnswers, consentWebca
                   {flagged.has(current.id) ? '★ À revoir' : '☆ Marquer à revoir'}
                 </button>
                 {idx < n - 1 ? (
-                  <button onClick={() => go(idx + 1)} className="rounded-xl bg-blue-600 px-5 py-2.5 font-bold text-white hover:bg-blue-700">Suivante →</button>
+                  <button onClick={() => go(idx + 1)} className="rounded-xl bg-brand-600 px-5 py-2.5 font-bold text-white hover:bg-brand-700">Suivante →</button>
                 ) : (
                   <button onClick={() => setView('review')} className="rounded-xl bg-emerald-600 px-5 py-2.5 font-bold text-white hover:bg-emerald-700">Vérifier et remettre</button>
                 )}
@@ -304,7 +304,7 @@ export default function ExamRunner({ exam, expiresAt, savedAnswers, consentWebca
               <h2 className="text-2xl font-black">Vérifier avant de remettre</h2>
               <p className="mt-1 text-sm text-slate-500">Cliquez sur une question pour y revenir.</p>
               <div className="mt-6 grid grid-cols-3 gap-3">
-                <div className="rounded-2xl bg-blue-50 p-4"><p className="text-3xl font-black text-blue-700">{answeredCount}</p><p className="text-xs text-blue-700">répondues</p></div>
+                <div className="rounded-2xl bg-brand-50 p-4"><p className="text-3xl font-black text-brand-700">{answeredCount}</p><p className="text-xs text-brand-700">répondues</p></div>
                 <div className={`rounded-2xl p-4 ${unanswered ? 'bg-rose-50' : 'bg-slate-50'}`}><p className={`text-3xl font-black ${unanswered ? 'text-rose-600' : 'text-slate-400'}`}>{unanswered}</p><p className="text-xs text-slate-600">sans réponse</p></div>
                 <div className="rounded-2xl bg-amber-50 p-4"><p className="text-3xl font-black text-amber-600">{flagged.size}</p><p className="text-xs text-amber-700">à revoir</p></div>
               </div>
@@ -312,7 +312,7 @@ export default function ExamRunner({ exam, expiresAt, savedAnswers, consentWebca
                 {questions.map((q, i) => (
                   <li key={q.id}>
                     <button onClick={() => go(i)} className="flex w-full items-center gap-3 rounded-xl border border-slate-200 p-3 text-left hover:bg-slate-50">
-                      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${isAnswered(answers[q.id]) ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500'}`}>{i + 1}</span>
+                      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${isAnswered(answers[q.id]) ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-500'}`}>{i + 1}</span>
                       <span className="line-clamp-1 flex-1 text-sm">{q.text}</span>
                       {flagged.has(q.id) && <span className="text-amber-500" title="À revoir">★</span>}
                       {!isAnswered(answers[q.id]) && <span className="text-xs font-semibold text-rose-500">vide</span>}
@@ -343,7 +343,7 @@ export default function ExamRunner({ exam, expiresAt, savedAnswers, consentWebca
                     key={q.id}
                     onClick={() => go(i)}
                     aria-label={`Question ${i + 1}${done ? ', répondue' : ''}${flagged.has(q.id) ? ', à revoir' : ''}`}
-                    className={`relative h-10 rounded-xl text-sm font-bold transition ${done ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'} ${isCur ? 'ring-2 ring-blue-600 ring-offset-2' : ''}`}
+                    className={`relative h-10 rounded-xl text-sm font-bold transition ${done ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'} ${isCur ? 'ring-2 ring-brand-600 ring-offset-2' : ''}`}
                   >
                     {i + 1}
                     {flagged.has(q.id) && <span className="absolute -right-1 -top-1 h-3 w-3 rounded-full bg-amber-400 ring-2 ring-white" />}
@@ -352,7 +352,7 @@ export default function ExamRunner({ exam, expiresAt, savedAnswers, consentWebca
               })}
             </div>
             <div className="mt-4 flex flex-wrap gap-3 text-[11px] text-slate-500">
-              <span className="flex items-center gap-1"><span className="h-3 w-3 rounded bg-blue-600" /> répondue</span>
+              <span className="flex items-center gap-1"><span className="h-3 w-3 rounded bg-brand-600" /> répondue</span>
               <span className="flex items-center gap-1"><span className="h-3 w-3 rounded bg-slate-200" /> sans réponse</span>
               <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-amber-400" /> à revoir</span>
             </div>

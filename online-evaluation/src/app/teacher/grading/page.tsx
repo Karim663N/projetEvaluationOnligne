@@ -1,9 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import type { BadgeView, GradingSubmissionView } from '@/lib/types';
 import { useRoleGuard } from '@/lib/use-role-guard';
+import AppShell from '@/components/shell/AppShell';
+import { Icon } from '@/components/ui/Icon';
+import { Avatar, EmptyState, PageHeader } from '@/components/ui/kit';
 
 export default function GradingPage() {
   useRoleGuard('TEACHER');
@@ -15,21 +17,118 @@ export default function GradingPage() {
   const [grades, setGrades] = useState<Record<string, number>>({});
   const [feedback, setFeedback] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState('');
-  const refresh = async () => { const res = await fetch('/api/teacher/submissions'); const data = await res.json(); if (res.ok) { setSubmissions(data.submissions); setBadges(data.badges || []); const next: Record<string, number> = {}; const notes: Record<string, string> = {}; for (const sub of data.submissions) for (const a of sub.answers) { next[a.id] = a.score; notes[a.id] = a.feedback || ''; } setGrades(next); setFeedback(notes); } };
-  useEffect(() => { refresh(); }, []);
-  const createBadge = async (event: React.FormEvent) => { event.preventDefault(); const res = await fetch('/api/teacher/badges', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: badgeName, imageUrl: badgeImage || null }) }); const data = await res.json(); setNotice(res.ok ? 'Badge created and ready to award.' : data.error || 'Could not create badge'); if (res.ok) { setBadgeName(''); setBadgeImage(''); refresh(); } };
-  const uploadBadgeImage = async (file?: File) => { if (!file) return; const form = new FormData(); form.set('file', file); const res = await fetch('/api/uploads/images', { method: 'POST', body: form }); const data = await res.json(); if (res.ok) setBadgeImage(data.url); else setNotice(data.error || 'Image upload failed'); };
-  const save = async (submission: GradingSubmissionView) => {
-    const res = await fetch('/api/teacher/submissions', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ submissionId: submission.id, badgeId: selectedBadge[submission.id] || undefined, answers: submission.answers.map(a => ({ id: a.id, score: grades[a.id] ?? a.score, feedback: feedback[a.id] || '' })) }) });
-    const data = await res.json(); setNotice(res.ok ? `Saved grade: ${data.submission.score} / ${data.submission.totalScore}` : data.error || 'Could not save grade'); refresh();
+  const [openId, setOpenId] = useState<string | null>(null);
+
+  const refresh = async () => {
+    const res = await fetch('/api/teacher/submissions');
+    const data = await res.json();
+    if (!res.ok) return;
+    setSubmissions(data.submissions);
+    setBadges(data.badges || []);
+    const next: Record<string, number> = {}; const notes: Record<string, string> = {};
+    for (const sub of data.submissions) for (const a of sub.answers) { next[a.id] = a.score; notes[a.id] = a.feedback || ''; }
+    setGrades(next); setFeedback(notes);
+    setOpenId((prev) => prev ?? (data.submissions as GradingSubmissionView[]).find((s) => s.status !== 'GRADED')?.id ?? null);
   };
-  return <main className="min-h-screen bg-slate-50 p-6 md:p-10 text-slate-900"><div className="mx-auto max-w-5xl space-y-7">
-    <header><Link href="/teacher/home" className="text-sm text-emerald-700">← Teacher workspace</Link><h1 className="mt-2 text-3xl font-bold">Grading center</h1><p className="text-slate-500">Review submissions, score written responses, and return feedback.</p></header>
-    {notice && <div className="rounded-lg bg-emerald-50 p-3 text-emerald-800">{notice}</div>}
-    <form onSubmit={createBadge} className="flex flex-wrap items-end gap-3 rounded-xl border bg-white p-4"><div><label className="mb-1 block text-sm font-semibold">Create badge for grading</label><input required minLength={2} value={badgeName} onChange={e => setBadgeName(e.target.value)} placeholder="Badge name" className="rounded-lg border px-3 py-2"/></div><label className="text-sm">Badge image<input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={e => uploadBadgeImage(e.target.files?.[0])} className="mt-1 block max-w-56 text-xs"/></label>{badgeImage && <img src={badgeImage} alt="Badge preview" className="h-10 w-10 rounded-full object-cover"/>}<button className="rounded-lg bg-amber-500 px-4 py-2 font-semibold text-white">Create badge</button></form>
-    {submissions.filter(s => s.status !== 'GRADED').length === 0 && <div className="rounded-2xl border bg-white p-8 text-center text-slate-500">No submissions are waiting for grading.</div>}
-    <div className="space-y-5">{submissions.filter(s => s.status !== 'GRADED').map(sub => <article key={sub.id} className="rounded-2xl border bg-white p-6 shadow-sm"><div className="flex flex-wrap justify-between gap-2"><div><h2 className="text-xl font-bold">{sub.exam.title}</h2><p className="text-sm text-slate-500">{sub.user.name} · {sub.user.email} · Submitted {new Date(sub.submittedAt).toLocaleString()}</p></div><span className="h-fit rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">{sub.status}</span></div>
-      <div className="mt-5 space-y-4">{sub.answers.map(a => <div key={a.id} className="rounded-xl border p-4"><div className="flex flex-wrap justify-between gap-2"><strong>{a.question.text}</strong><span className="text-xs text-slate-500">Max {a.question.points} pts</span></div>{a.question.imageUrl && <img src={a.question.imageUrl} alt="Question illustration" className="mt-3 max-h-48 rounded object-contain"/>}<p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{a.textResponse || a.selectedOption?.text || 'No answer provided'}</p><div className="mt-3 grid gap-3 md:grid-cols-[130px_1fr]"><input type="number" min={0} max={a.question.points} step="0.5" value={grades[a.id] ?? 0} onChange={e => setGrades({ ...grades, [a.id]: Number(e.target.value) })} className="rounded-lg border px-3 py-2" aria-label="Score"/><input value={feedback[a.id] ?? ''} onChange={e => setFeedback({ ...feedback, [a.id]: e.target.value })} placeholder="Feedback for student" className="rounded-lg border px-3 py-2"/></div></div>)}</div>
-      <div className="mt-5 flex flex-wrap items-center gap-3">{badges.length > 0 && <><select value={selectedBadge[sub.id] || ''} onChange={e => setSelectedBadge({ ...selectedBadge, [sub.id]: e.target.value })} className="rounded-lg border bg-white px-3 py-2"><option value="">No badge</option>{badges.map(b => <option key={b.id} value={b.id}>Award: {b.name}</option>)}</select>{badges.find(b => b.id === selectedBadge[sub.id])?.imageUrl && <img src={badges.find(b => b.id === selectedBadge[sub.id])?.imageUrl || ''} alt="Selected badge" className="h-10 w-10 rounded-full object-cover"/>}</>}<button onClick={() => save(sub)} className="rounded-lg bg-emerald-700 px-5 py-2.5 font-semibold text-white">Save and return grade</button></div></article>)}</div>
-  </div></main>;
+  useEffect(() => { refresh(); }, []);
+
+  const createBadge = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const res = await fetch('/api/teacher/badges', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: badgeName, imageUrl: badgeImage || null }) });
+    const data = await res.json();
+    setNotice(res.ok ? 'Badge créé, prêt à être attribué.' : data.error || 'Création du badge impossible');
+    if (res.ok) { setBadgeName(''); setBadgeImage(''); refresh(); }
+  };
+  const uploadBadgeImage = async (file?: File) => {
+    if (!file) return;
+    const form = new FormData(); form.set('file', file);
+    const res = await fetch('/api/uploads/images', { method: 'POST', body: form }); const data = await res.json();
+    if (res.ok) setBadgeImage(data.url); else setNotice(data.error || 'Import de l’image impossible');
+  };
+  const save = async (submission: GradingSubmissionView) => {
+    const res = await fetch('/api/teacher/submissions', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ submissionId: submission.id, badgeId: selectedBadge[submission.id] || undefined, answers: submission.answers.map((a) => ({ id: a.id, score: grades[a.id] ?? a.score, feedback: feedback[a.id] || '' })) }),
+    });
+    const data = await res.json();
+    setNotice(res.ok ? `Note enregistrée : ${data.submission.score} / ${data.submission.totalScore} — ${submission.user.name}.` : data.error || 'Enregistrement impossible');
+    // copie suivante a corriger
+    if (res.ok) setOpenId(queue.find((s) => s.id !== submission.id)?.id ?? null);
+    refresh();
+  };
+
+  const queue = submissions.filter((s) => s.status !== 'GRADED');
+
+  return (
+    <AppShell role="TEACHER" active="grading">
+      <PageHeader eyebrow="Enseignement" title="Correction" subtitle="Notez les réponses rédigées, laissez un retour et attribuez un badge si vous le souhaitez." />
+
+      {notice && <div className="eg-alert eg-alert-success mb-5 flex items-center justify-between gap-3">{notice}<button onClick={() => setNotice('')} aria-label="Fermer"><Icon name="x" className="h-4 w-4" /></button></div>}
+
+      <div className="grid gap-5 lg:grid-cols-[1fr_300px]">
+        <div className="space-y-3">
+          <p className="text-sm text-slate-500"><strong className="text-slate-900">{queue.length}</strong> copie{queue.length > 1 ? 's' : ''} à corriger</p>
+          {queue.length === 0 && <EmptyState icon="check" title="Tout est corrigé" text="Aucune copie n’attend de correction pour l’instant." />}
+          {queue.map((sub) => {
+            const open = openId === sub.id;
+            const max = sub.answers.reduce((s, a) => s + a.question.points, 0);
+            const current = sub.answers.reduce((s, a) => s + (grades[a.id] ?? a.score), 0);
+            return (
+              <article key={sub.id} className={`eg-card overflow-hidden ${open ? 'ring-brand-200' : ''}`}>
+                <button onClick={() => setOpenId(open ? null : sub.id)} aria-expanded={open} className="flex w-full flex-wrap items-center gap-3 px-5 py-4 text-start">
+                  <Avatar name={sub.user.name} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-semibold text-slate-900">{sub.exam.title}</p>
+                    <p className="truncate text-xs text-slate-500">{sub.user.name} · remis le {new Date(sub.submittedAt).toLocaleString('fr-FR')}</p>
+                  </div>
+                  <span className="eg-badge eg-badge-amber">À corriger</span>
+                  <span className="text-sm font-semibold tabular-nums text-slate-700">{current} / {max}</span>
+                  <Icon name="chevronDown" className={`h-4 w-4 text-slate-400 transition ${open ? 'rotate-180' : ''}`} />
+                </button>
+                {open && (
+                  <div className="space-y-3 border-t border-slate-100 bg-slate-50/50 p-5">
+                    {sub.answers.map((a, i) => (
+                      <div key={a.id} className="rounded-xl bg-white p-4 ring-1 ring-slate-200">
+                        <div className="flex items-start justify-between gap-3">
+                          <p className="text-sm font-semibold text-slate-900"><span className="me-2 text-slate-400">Q{i + 1}.</span>{a.question.text}</p>
+                          <span className="eg-badge eg-badge-slate">{a.question.points} pt{a.question.points > 1 ? 's' : ''}</span>
+                        </div>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        {a.question.imageUrl && <img src={a.question.imageUrl} alt="Illustration" className="mt-3 max-h-40 rounded-lg object-contain" />}
+                        <p className="mt-3 whitespace-pre-wrap rounded-lg bg-slate-50 p-3 text-sm text-slate-700">{a.textResponse || a.selectedOption?.text || <span className="italic text-slate-400">Pas de réponse</span>}</p>
+                        <div className="mt-3 grid gap-3 sm:grid-cols-[140px_1fr]">
+                          <label><span className="eg-label">Note</span>
+                            <div className="flex items-center gap-2"><input type="number" min={0} max={a.question.points} step="0.5" value={grades[a.id] ?? 0} onChange={(e) => setGrades({ ...grades, [a.id]: Number(e.target.value) })} className="eg-input" aria-label="Note" /><span className="text-sm text-slate-400">/ {a.question.points}</span></div>
+                          </label>
+                          <label><span className="eg-label">Retour à l’étudiant</span><input value={feedback[a.id] ?? ''} onChange={(e) => setFeedback({ ...feedback, [a.id]: e.target.value })} placeholder="Facultatif" className="eg-input" /></label>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="flex flex-wrap items-center gap-3 pt-1">
+                      {badges.length > 0 && (
+                        <select value={selectedBadge[sub.id] || ''} onChange={(e) => setSelectedBadge({ ...selectedBadge, [sub.id]: e.target.value })} className="eg-input w-56">
+                          <option value="">Sans badge</option>
+                          {badges.map((b) => <option key={b.id} value={b.id}>Attribuer : {b.name}</option>)}
+                        </select>
+                      )}
+                      <button onClick={() => save(sub)} className="eg-btn eg-btn-primary ms-auto"><Icon name="check" className="h-4 w-4" />Enregistrer et rendre la note</button>
+                    </div>
+                  </div>
+                )}
+              </article>
+            );
+          })}
+        </div>
+
+        <form onSubmit={createBadge} className="eg-card h-fit space-y-4 p-5">
+          <p className="eg-h2 flex items-center gap-2"><Icon name="award" className="h-4 w-4 text-amber-500" />Badge de correction</p>
+          <label className="block"><span className="eg-label">Nom du badge</span><input required minLength={2} value={badgeName} onChange={(e) => setBadgeName(e.target.value)} placeholder="Ex. : Excellente rédaction" className="eg-input" /></label>
+          <label className="block"><span className="eg-label">Image</span><input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={(e) => uploadBadgeImage(e.target.files?.[0])} className="eg-file" /></label>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          {badgeImage && <img src={badgeImage} alt="Aperçu" className="h-12 w-12 rounded-full object-cover" />}
+          <button className="eg-btn eg-btn-secondary w-full">Créer le badge</button>
+        </form>
+      </div>
+    </AppShell>
+  );
 }

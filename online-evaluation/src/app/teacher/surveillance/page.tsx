@@ -3,8 +3,10 @@
 // Tableau de bord enseignant ExamGuard AI : alertes expliquees, etats de fraude observes,
 // chronologie, validation humaine (EF7, EF8, EF9). Un score n'est jamais presente comme une preuve.
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { useRoleGuard } from '@/lib/use-role-guard';
+import AppShell from '@/components/shell/AppShell';
+import { Icon } from '@/components/ui/Icon';
+import { PageHeader, StatCard } from '@/components/ui/kit';
 
 interface Contribution { variable: string; libelle: string; valeur: number; contribution: number; direction: string; texte: string }
 interface Explanation { contributions: Contribution[]; unite_contribution: string; probabilite: number }
@@ -52,7 +54,7 @@ const STATUS: Record<Report['status'], { label: string; cls: string }> = {
   PENDING: { label: 'À examiner', cls: 'bg-amber-100 text-amber-800' },
   CONFIRMED: { label: 'Alerte confirmée', cls: 'bg-rose-100 text-rose-800' },
   REJECTED: { label: 'Alerte rejetée', cls: 'bg-emerald-100 text-emerald-800' },
-  REVIEW: { label: 'Revue demandée', cls: 'bg-blue-100 text-blue-800' },
+  REVIEW: { label: 'Revue demandée', cls: 'bg-brand-100 text-brand-800' },
 };
 // regles navigateur (pas de modele appris) : seuil a partir duquel l'evenement est signale
 const EVENT_RULES: { key: string; icone: string; label: string; warnAt: number; unit?: string }[] = [
@@ -186,56 +188,46 @@ export default function SurveillancePage() {
   }, [reports, filter, query]);
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 text-slate-900">
-      <div className="border-b border-slate-200 bg-white">
-        <div className="mx-auto max-w-6xl px-6 py-6">
-          <Link href="/teacher/home" className="text-sm font-medium text-emerald-700 hover:underline">← Espace enseignant</Link>
-          <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <h1 className="text-3xl font-black tracking-tight">Surveillance des examens</h1>
-              <p className="text-slate-500">Alertes ExamGuard AI expliquées — vous décidez : confirmer, rejeter ou demander une revue.</p>
-            </div>
-            <div className="flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1.5 text-xs">
-              <span className={`h-2 w-2 rounded-full ${mlService?.status === 'ok' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-              Service ML {mlService?.status === 'ok' ? 'opérationnel' : mlService?.status ?? '…'}
-              {mlService?.modeles && <span className="text-slate-400">· {mlService.modeles.browser} + {mlService.modeles.webcam}</span>}
-            </div>
-          </div>
-          <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-            {[
-              { label: 'Copies surveillées', value: kpi.total, cls: 'text-slate-900' },
-              { label: 'Alertes', value: kpi.alerts, cls: 'text-rose-600' },
-              { label: 'À examiner', value: kpi.pending, cls: 'text-amber-600' },
-              { label: 'Alertes confirmées', value: kpi.confirmed, cls: 'text-slate-900' },
-            ].map((k) => (
-              <div key={k.label} className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200">
-                <p className={`text-3xl font-black ${k.cls}`}>{k.value}</p>
-                <p className="text-xs font-medium text-slate-500">{k.label}</p>
-              </div>
-            ))}
-          </div>
-        </div>
+    <AppShell role="TEACHER" active="surveillance">
+      <PageHeader eyebrow="Intégrité" title="Surveillance des examens"
+        subtitle="Alertes ExamGuard AI expliquées — vous décidez : confirmer, rejeter ou demander une revue."
+        actions={
+          <span className="flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-xs font-medium ring-1 ring-slate-200">
+            <span className={`h-2 w-2 rounded-full ${mlService?.status === 'ok' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+            Service ML {mlService?.status === 'ok' ? 'opérationnel' : mlService?.status ?? '…'}
+            {mlService?.modeles && <span className="text-slate-400">· {mlService.modeles.browser} + {mlService.modeles.webcam}</span>}
+          </span>
+        } />
+      <div className="mb-5 grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatCard label="Copies surveillées" value={kpi.total} icon="eye" tone="brand" />
+        <StatCard label="Alertes" value={kpi.alerts} icon="alert" tone="red" />
+        <StatCard label="À examiner" value={kpi.pending} icon="clock" tone="amber" />
+        <StatCard label="Alertes confirmées" value={kpi.confirmed} icon="flag" tone="slate" />
       </div>
 
-      <div className="mx-auto max-w-6xl space-y-5 px-6 py-6">
-        <div className="rounded-2xl border-l-4 border-amber-500 bg-amber-50 p-4 text-sm text-amber-900">
-          Un score n&apos;est pas une preuve : il signale un comportement à vérifier. Les états observés sont des faits
-          (avec leur fiabilité mesurée) ; les poids de fusion viennent de données simulées et doivent être recalibrés sur le pilote.
+      <div className="space-y-5">
+        <div className="eg-alert eg-alert-warn flex items-start gap-3 font-normal">
+          <Icon name="alert" className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+          <span>Un score n&apos;est pas une preuve : il signale un comportement à vérifier. Les états observés sont des faits
+          (avec leur fiabilité mesurée) ; les poids de fusion viennent de données simulées et doivent être recalibrés sur le pilote.</span>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex gap-1 rounded-xl bg-white p-1 ring-1 ring-slate-200">
+          <div className="eg-segmented" role="group" aria-label="Filtrer">
             {(['all', 'alerts', 'pending'] as const).map((f) => (
-              <button key={f} onClick={() => setFilter(f)} className={`rounded-lg px-4 py-1.5 text-sm font-semibold ${filter === f ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'}`}>
+              <button key={f} onClick={() => setFilter(f)} aria-pressed={filter === f}>
                 {{ all: 'Toutes', alerts: 'Alertes', pending: 'À examiner' }[f]}
               </button>
             ))}
           </div>
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher un étudiant ou un examen…" className="w-full max-w-xs rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm" />
+          <div className="relative w-full max-w-xs">
+            <Icon name="search" className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher un étudiant ou un examen…" className="eg-input ps-9" />
+          </div>
         </div>
         {!loading && shown.length > 0 && <p className="text-xs text-slate-500">Classées par priorité : alertes à examiner d&apos;abord, puis risque décroissant. Cliquez sur une copie pour la déplier ; après une décision, la suivante s&apos;ouvre.</p>}
-        {notice && <div className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">{notice}</div>}
-        {loading && <p className="text-slate-500">Chargement…</p>}
-        {!loading && shown.length === 0 && <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-500">Aucune copie pour ce filtre.</div>}
+        {notice && <div className="eg-alert eg-alert-success">{notice}</div>}
+        {loading && <div className="eg-card h-24 animate-pulse bg-slate-100/60" />}
+        {!loading && shown.length === 0 && <div className="eg-empty">Aucune copie pour ce filtre.</div>}
 
         {shown.map((r) => {
           const nav = r.details.navigateur;
@@ -255,7 +247,7 @@ export default function SurveillancePage() {
           ];
           const risk = r.fusedScore == null ? null : Math.round(100 * r.fusedScore);
           return (
-            <article key={r.id} className={`overflow-hidden rounded-3xl bg-white shadow-sm ring-1 transition ${r.alert ? 'ring-rose-300' : 'ring-slate-200'} ${isOpen ? 'shadow-md' : 'hover:shadow-md'}`}>
+            <article key={r.id} className={`eg-card overflow-hidden transition ${r.alert ? 'ring-rose-200' : ''} ${isOpen ? '' : 'eg-card-hover'}`}>
               <button
                 type="button"
                 onClick={() => setOpenId(isOpen ? null : r.id)}
@@ -345,11 +337,11 @@ export default function SurveillancePage() {
                 )}
 
                 <div className="space-y-2 border-t border-slate-100 pt-4">
-                  <textarea value={notes[r.id] ?? ''} onChange={(e) => setNotes({ ...notes, [r.id]: e.target.value })} rows={2} placeholder="Note de décision (journal d'audit)" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+                  <textarea value={notes[r.id] ?? ''} onChange={(e) => setNotes({ ...notes, [r.id]: e.target.value })} rows={2} placeholder="Note de décision (journal d'audit)" className="eg-input" />
                   <div className="flex flex-wrap items-center gap-2">
-                    <button onClick={() => decide(r, 'CONFIRMED')} className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700">Confirmer l&apos;alerte</button>
-                    <button onClick={() => decide(r, 'REJECTED')} className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800">Rejeter</button>
-                    <button onClick={() => decide(r, 'REVIEW')} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">Demander une revue</button>
+                    <button onClick={() => decide(r, 'CONFIRMED')} className="eg-btn eg-btn-danger"><Icon name="flag" className="h-4 w-4" />Confirmer l&apos;alerte</button>
+                    <button onClick={() => decide(r, 'REJECTED')} className="eg-btn eg-btn-success"><Icon name="check" className="h-4 w-4" />Rejeter</button>
+                    <button onClick={() => decide(r, 'REVIEW')} className="eg-btn eg-btn-secondary"><Icon name="eye" className="h-4 w-4" />Demander une revue</button>
                     {r.decidedAt && <span className="text-xs text-slate-500">Décision du {new Date(r.decidedAt).toLocaleString()}</span>}
                   </div>
                 </div>
@@ -358,6 +350,6 @@ export default function SurveillancePage() {
           );
         })}
       </div>
-    </main>
+    </AppShell>
   );
 }

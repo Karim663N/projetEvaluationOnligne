@@ -20,6 +20,14 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Interface
+
+- Système de design : `src/app/globals.css` (jetons de couleur `brand` / `ink`, composants `eg-card`, `eg-btn-*`,
+  `eg-input`, `eg-badge-*`…) et briques partagées dans `src/components/ui/` (icônes, logo, cartes de statistiques…).
+- Cadre commun des trois espaces : `src/components/shell/AppShell.tsx` — barre latérale groupée avec compteurs
+  (alertes à examiner, copies à corriger), recherche rapide **Ctrl+K**, langue FR / EN / AR (droite-à-gauche),
+  tiroir de navigation sur mobile. Écrans de connexion : `src/components/shell/AuthLayout.tsx`.
+
 ## Surveillance ExamGuard AI (module ML)
 
 L'application appelle le service ML ExamGuard AI (dépôt du module ML, dossier `ml/`, fichier `service.py`, FastAPI)
