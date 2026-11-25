@@ -10,7 +10,7 @@ export default function StudentRecommendationsPage() {
   return (
     <AppShell role="STUDENT" active="recommendations">
       <PageHeader eyebrow="Carrière" title="Recommandations IA" subtitle="Analysez votre profil et découvrez des parcours d’apprentissage sur mesure, propulsés par Gemini." />
-      <div className="-mx-6"><CourseRecommender /></div>
+      <CourseRecommender />
     </AppShell>
   );
 }

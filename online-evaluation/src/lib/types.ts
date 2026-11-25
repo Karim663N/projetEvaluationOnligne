@@ -76,7 +76,8 @@ export interface StudentSubmissionView {
   totalScore: number;
   status: string;
   submittedAt: string;
-  exam?: { title: string };
+  completedAt?: string | null;
+  exam?: { title: string; passingScore?: number };
 }
 
 export interface StudentProfileView {

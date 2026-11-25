@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { Icon } from '@/components/ui/Icon';
 
 interface RecommendedCourse {
   title: string;
@@ -15,6 +16,17 @@ interface AnalysisResult {
   competences: string[];
   recommendedCourses: RecommendedCourse[];
 }
+
+const difficultyBadge = (difficulty: string) => {
+  switch (difficulty.toLowerCase()) {
+    case 'débutant': case 'beginner': return 'eg-badge-green';
+    case 'intermédiaire': case 'intermediate': return 'eg-badge-brand';
+    case 'avancé': case 'advanced': return 'eg-badge-red';
+    default: return 'eg-badge-slate';
+  }
+};
+
+const STEPS = ['Import du CV', 'Lecture par l’IA', 'Recommandations'];
 
 export default function CourseRecommender() {
   const [file, setFile] = useState<File | null>(null);
@@ -51,208 +63,122 @@ export default function CourseRecommender() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!file) {
-      setError('Veuillez sélectionner un fichier CV au format PDF.');
-      return;
-    }
-
+    if (!file) { setError('Veuillez sélectionner un fichier CV au format PDF.'); return; }
     setLoading(true);
     setError(null);
-
     try {
       const formData = new FormData();
       formData.append('file', file);
-
       const uploadRes = await fetch('/api/student/cv', { method: 'POST', body: formData });
       const uploadData = await uploadRes.json();
       if (!uploadRes.ok) throw new Error(uploadData.error || 'Impossible d\'enregistrer le CV');
       setHasCurrentCv(true);
-
-      const res = await fetch('/api/recommend-courses', {
-        method: 'POST',
-        body: formData,
-      });
-
+      const res = await fetch('/api/recommend-courses', { method: 'POST', body: formData });
       const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Erreur lors de l\'analyse du CV');
-      }
-
+      if (!res.ok || !data.success) throw new Error(data.error || 'Erreur lors de l\'analyse du CV');
       setResult(data.data);
     } catch (err: unknown) {
-      const errorObj = err as Error;
-      setError(errorObj.message || 'Une erreur inattendue est survenue.');
+      setError((err as Error).message || 'Une erreur inattendue est survenue.');
     } finally {
       setLoading(false);
     }
   };
 
-  const getDifficultyColor = (difficulty: string) => {
-    switch (difficulty.toLowerCase()) {
-      case 'débutant':
-      case 'beginner':
-        return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
-      case 'intermédiaire':
-      case 'intermediate':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
-      case 'avancé':
-      case 'advanced':
-        return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300';
-      default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
-    }
-  };
+  const step = result ? 3 : loading ? 2 : file ? 1 : 0;
 
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-8">
-      {/* Upload Card */}
-      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 p-8 transition-all">
-        <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 mb-4">
-            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-          </div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Analyse IA de CV & Recommandations</h2>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">Importez votre CV au format PDF pour recevoir un bilan personnalisé et des formations adaptées.</p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="flex items-center justify-center w-full">
-            <label onDragOver={(e) => e.preventDefault()} onDrop={handleDrop} className="flex flex-col items-center justify-center w-full h-40 border-2 border-gray-300 dark:border-gray-700 border-dashed rounded-xl cursor-pointer bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-              <div className="flex flex-col items-center justify-center pt-5 pb-6 px-4 text-center">
-                <svg className="w-10 h-10 mb-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                </svg>
-                {file ? (
-                  <p className="text-sm font-semibold text-indigo-600 dark:text-indigo-400">{file.name}</p>
-                ) : (
-                  <>
-                    <p className="mb-2 text-sm text-gray-500 dark:text-gray-400"><span className="font-semibold">Cliquez pour importer</span> ou glissez-déposez</p>
-                    <p className="text-xs text-gray-400 dark:text-gray-500">PDF (MAX. 10Mo)</p>
-                  </>
-                )}
-              </div>
-              <input type="file" className="hidden" accept="application/pdf" onChange={handleFileChange} />
-            </label>
-          </div>
-
-          {hasCurrentCv && <a href="/api/student/cv" target="_blank" rel="noopener noreferrer" className="inline-flex text-sm font-semibold text-indigo-600 hover:underline">View Current CV</a>}
-
-          {error && (
-            <div className="p-4 rounded-lg bg-red-50 dark:bg-red-950/50 text-red-700 dark:text-red-300 text-sm border border-red-200 dark:border-red-900">
-              {error}
+    <div className="space-y-6">
+      <div className="grid gap-5 lg:grid-cols-[1.3fr_1fr]">
+        <form onSubmit={handleSubmit} className="eg-card p-6">
+          <div className="flex items-start gap-4">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-brand-500 to-violet-500 text-white shadow-lg shadow-brand-500/30"><Icon name="sparkles" /></span>
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">Analyse IA de votre CV</h2>
+              <p className="text-sm text-slate-500">Importez votre CV (PDF) pour obtenir un bilan personnalisé et des formations adaptées.</p>
             </div>
-          )}
-
-          <div className="flex justify-end">
-            <button
-              type="submit"
-              disabled={loading || !file}
-              className="inline-flex items-center px-6 py-3 rounded-xl text-white font-medium bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-indigo-500/25"
-            >
-              {loading ? (
-                <>
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Analyse par l&apos;IA en cours...
-                </>
-              ) : (
-                'Analyse and Recommand Formation'
-              )}
+          </div>
+          <label onDragOver={(e) => e.preventDefault()} onDrop={handleDrop}
+            className={`mt-5 flex h-44 w-full cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed text-center transition ${file ? 'border-brand-300 bg-brand-50/60' : 'border-slate-300 bg-slate-50/60 hover:border-brand-300 hover:bg-brand-50/40'}`}>
+            <span className={`grid h-12 w-12 place-items-center rounded-2xl ${file ? 'bg-brand-600 text-white' : 'bg-white text-slate-400 ring-1 ring-slate-200'}`}><Icon name={file ? 'check' : 'upload'} /></span>
+            {file ? <p className="mt-3 text-sm font-semibold text-brand-700">{file.name}</p> : (
+              <>
+                <p className="mt-3 text-sm text-slate-600"><span className="font-semibold text-slate-900">Cliquez pour importer</span> ou glissez-déposez</p>
+                <p className="mt-0.5 text-xs text-slate-400">PDF · 10 Mo maximum</p>
+              </>
+            )}
+            <input type="file" className="hidden" accept="application/pdf" onChange={handleFileChange} />
+          </label>
+          {error && <div className="eg-alert eg-alert-error mt-4">{error}</div>}
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+            {hasCurrentCv ? <a href="/api/student/cv" target="_blank" rel="noopener noreferrer" className="eg-btn eg-btn-ghost eg-btn-sm"><Icon name="external" className="h-3.5 w-3.5" />Voir mon CV actuel</a> : <span />}
+            <button type="submit" disabled={loading || !file} className="eg-btn eg-btn-primary">
+              {loading ? <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />Analyse en cours…</> : <><Icon name="sparkles" className="h-4 w-4" />Analyser et recommander</>}
             </button>
           </div>
         </form>
+
+        <div className="relative overflow-hidden rounded-2xl eg-aurora p-6 text-white">
+          <div className="eg-grid-bg absolute inset-0" />
+          <div className="relative">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-glow-400">Comment ça marche</p>
+            <ol className="mt-4 space-y-4">
+              {STEPS.map((s, i) => (
+                <li key={s} className="flex items-center gap-3">
+                  <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-bold ${i < step ? 'bg-emerald-400 text-ink-950' : i === step ? 'bg-white text-ink-950' : 'bg-white/10 text-slate-300 ring-1 ring-white/15'}`}>
+                    {i < step ? <Icon name="check" className="h-4 w-4" strokeWidth={2.6} /> : i + 1}
+                  </span>
+                  <span className={`text-sm ${i <= step ? 'font-semibold text-white' : 'text-slate-400'}`}>{s}</span>
+                </li>
+              ))}
+            </ol>
+            <p className="mt-6 text-xs leading-relaxed text-slate-300">Votre CV est analysé par Gemini uniquement à votre demande. Les recommandations sont indicatives : parlez-en avec vos enseignants.</p>
+          </div>
+        </div>
       </div>
 
-      {/* Results Section */}
       {result && (
-        <div className="space-y-8 animate-fade-in">
-          {/* Section 1: Points Forts & Compétences */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 p-6">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center">
-                <span className="w-3 h-3 bg-green-500 rounded-full mr-2"></span>
-                Points Forts
-              </h3>
-              <ul className="space-y-2">
+        <div className="space-y-5 animate-fade-up">
+          <div className="grid gap-5 md:grid-cols-2">
+            <section className="eg-card p-6">
+              <h3 className="eg-h2 flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-lg bg-emerald-50 text-emerald-600"><Icon name="trending" className="h-4 w-4" /></span>Points forts</h3>
+              <ul className="mt-4 space-y-2.5">
                 {result.pointsForts?.map((point, index) => (
-                  <li key={index} className="flex items-start text-sm text-gray-600 dark:text-gray-300">
-                    <svg className="w-5 h-5 text-green-500 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                    </svg>
-                    {point}
-                  </li>
+                  <li key={index} className="flex items-start gap-2.5 text-sm text-slate-700"><Icon name="check" className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" strokeWidth={2.4} />{point}</li>
                 ))}
               </ul>
-            </div>
-
-            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 p-6">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center">
-                <span className="w-3 h-3 bg-indigo-500 rounded-full mr-2"></span>
-                Compétences Clés
-              </h3>
-              <div className="flex flex-wrap gap-2">
-                {result.competences?.map((comp, index) => (
-                  <span key={index} className="px-3 py-1 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 rounded-full text-xs font-medium border border-indigo-100 dark:border-indigo-900">
-                    {comp}
-                  </span>
-                ))}
+            </section>
+            <section className="eg-card p-6">
+              <h3 className="eg-h2 flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-lg bg-brand-50 text-brand-600"><Icon name="zap" className="h-4 w-4" /></span>Compétences clés</h3>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {result.competences?.map((comp, index) => <span key={index} className="eg-badge eg-badge-brand py-1">{comp}</span>)}
               </div>
-            </div>
+            </section>
           </div>
 
-          {/* Section 2: Axes d'Amélioration */}
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 p-6">
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center">
-              <span className="w-3 h-3 bg-amber-500 rounded-full mr-2"></span>
-              Axes d&apos;Amélioration
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <section className="eg-card p-6">
+            <h3 className="eg-h2 flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-lg bg-amber-50 text-amber-600"><Icon name="target" className="h-4 w-4" /></span>Axes d’amélioration</h3>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
               {result.pointsAmeliorer?.map((point, index) => (
-                <div key={index} className="p-4 rounded-xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/30 text-sm text-amber-900 dark:text-amber-200 flex items-start">
-                  <svg className="w-5 h-5 text-amber-500 mr-2 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-                  <span>{point}</span>
-                </div>
+                <div key={index} className="flex items-start gap-2.5 rounded-xl bg-amber-50/70 p-3.5 text-sm text-amber-900 ring-1 ring-amber-100"><Icon name="alert" className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />{point}</div>
               ))}
             </div>
-          </div>
+          </section>
 
-          {/* Section 3: Formations Recommandées */}
-          <div className="space-y-4">
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center">
-              <svg className="w-6 h-6 text-indigo-600 dark:text-indigo-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-              </svg>
-              Formations Recommandées
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <section>
+            <h3 className="mb-3 flex items-center gap-2 text-lg font-semibold text-slate-900"><Icon name="book" className="h-5 w-5 text-brand-600" />Formations recommandées</h3>
+            <div className="grid gap-4 md:grid-cols-2">
               {result.recommendedCourses?.map((course, index) => (
-                <div key={index} className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 p-6 flex flex-col justify-between hover:border-indigo-500/50 transition-all">
-                  <div>
-                    <div className="flex items-start justify-between gap-4 mb-3">
-                      <h4 className="font-bold text-gray-900 dark:text-white text-lg">{course.title}</h4>
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${getDifficultyColor(course.difficulty)}`}>
-                        {course.difficulty}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">{course.reason}</p>
+                <article key={index} className="eg-card eg-card-hover flex flex-col p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <h4 className="font-semibold text-slate-900">{course.title}</h4>
+                    <span className={`eg-badge ${difficultyBadge(course.difficulty)}`}>{course.difficulty}</span>
                   </div>
-                  <div className="pt-4 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                    <span className="font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 px-2.5 py-1 rounded-lg">
-                      Focus: {course.focusArea}
-                    </span>
-                  </div>
-                </div>
+                  <p className="mt-2 text-sm text-slate-600">{course.reason}</p>
+                  <p className="mt-auto pt-4"><span className="eg-badge eg-badge-slate">Axe : {course.focusArea}</span></p>
+                </article>
               ))}
             </div>
-          </div>
+          </section>
         </div>
       )}
     </div>

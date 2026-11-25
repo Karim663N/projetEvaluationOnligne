@@ -9,6 +9,7 @@ import ExamRunner, { type RunnerExam, type SavedAnswer } from '@/components/exam
 import AppShell from '@/components/shell/AppShell';
 import { Icon } from '@/components/ui/Icon';
 import { Avatar, EmptyState, IconBubble, PageHeader, ProgressRing, StatCard } from '@/components/ui/kit';
+import { LineChart, Meter } from '@/components/ui/charts';
 
 type Tab = 'exams' | 'profile' | 'classes' | 'cv';
 type ExamFilter = 'all' | 'todo' | 'progress' | 'done';
@@ -239,6 +240,11 @@ export default function StudentHome() {
   const shownExams = exams
     .filter((e) => filter === 'all' || examState(e) === filter)
     .filter((e) => !query.trim() || `${e.title} ${e.description ?? ''}`.toLowerCase().includes(query.trim().toLowerCase()));
+  // progression : copies notees dans l'ordre chronologique
+  const timeline = graded
+    .map((s) => ({ s, at: new Date(s.completedAt ?? s.submittedAt) }))
+    .sort((a, b) => a.at.getTime() - b.at.getTime());
+  const trend = timeline.length >= 2 ? timeline[timeline.length - 1].s.score / timeline[timeline.length - 1].s.totalScore - timeline[0].s.score / timeline[0].s.totalScore : null;
   const firstName = (profileData.user?.name || profileName || '').split(' ')[0];
   const hour = new Date().getHours();
   const greeting = hour < 5 || hour >= 18 ? 'Bonsoir' : 'Bonjour';
@@ -486,6 +492,44 @@ export default function StudentHome() {
             <StatCard label={t.myClasses} value={classes.length} icon="users" tone="violet" />
             <StatCard label={t.badgesEarned} value={profileData.badges.length} icon="award" tone="amber" hint={`${profileData.certificates.length} certificat${profileData.certificates.length > 1 ? 's' : ''}`} />
           </div>
+
+          {timeline.length > 0 && (
+            <div className="grid gap-5 lg:grid-cols-[1.5fr_1fr]">
+              <section className="eg-card p-5">
+                <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+                  <h2 className="eg-h2">Ma progression</h2>
+                  {trend != null && (
+                    <span className={`eg-badge ${trend >= 0 ? 'eg-badge-green' : 'eg-badge-amber'}`}>
+                      <Icon name="trending" className="h-3.5 w-3.5" />{trend >= 0 ? '+' : '−'}{Math.abs(Math.round(100 * trend))} pts depuis le premier examen
+                    </span>
+                  )}
+                </div>
+                <LineChart height={210} ariaLabel="Score de chaque examen noté, dans l'ordre chronologique" threshold={0.5} thresholdLabel="50 %"
+                  data={timeline.map(({ s, at }) => ({ key: s.id, label: at.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }), value: s.score / s.totalScore, tip: `${s.exam?.title ?? 'Examen'} · ${at.toLocaleDateString('fr-FR')}` }))} />
+              </section>
+              <section className="eg-card overflow-hidden">
+                <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4"><h2 className="eg-h2">Derniers résultats</h2><a href="/student/results" className="text-xs font-semibold text-brand-600 hover:text-brand-700">Tout voir</a></div>
+                <ul className="divide-y divide-slate-100">
+                  {[...timeline].reverse().slice(0, 5).map(({ s, at }) => {
+                    const r = s.score / s.totalScore;
+                    const pass = 100 * r >= (s.exam?.passingScore ?? 50);
+                    return (
+                      <li key={s.id} className="px-5 py-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="min-w-0 truncate text-sm font-medium text-slate-900">{s.exam?.title ?? 'Examen'}</p>
+                          <span className="shrink-0 text-sm font-semibold tabular-nums text-slate-900">{s.score} / {s.totalScore}</span>
+                        </div>
+                        <div className="mt-1.5 flex items-center gap-3">
+                          <Meter value={r} tone={pass ? 'green' : 'amber'} />
+                          <span className="shrink-0 text-[11px] text-slate-500">{at.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}</span>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            </div>
+          )}
 
           <div>
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">

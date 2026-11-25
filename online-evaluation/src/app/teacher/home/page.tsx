@@ -3,9 +3,29 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ClassView, ExamView, QuestionView } from '@/lib/types';
 import { useRoleGuard } from '@/lib/use-role-guard';
+import Link from 'next/link';
 import AppShell from '@/components/shell/AppShell';
 import { Icon } from '@/components/ui/Icon';
-import { EmptyState, IconBubble, PageHeader, StatCard } from '@/components/ui/kit';
+import { Avatar, EmptyState, IconBubble, ProgressRing, StatCard } from '@/components/ui/kit';
+import { ColumnChart, Meter } from '@/components/ui/charts';
+
+interface ExamStats { id: string; submissions: number; toGrade: number; average: number | null; passRate: number | null; alerts: number; pendingAlerts: number }
+interface Overview {
+  totals: { exams: number; published: number; submissions: number; average: number | null; toGrade: number; pendingAlerts: number; emptyDrafts: number };
+  perExam: ExamStats[];
+  daily: { date: string; count: number }[];
+  distribution: { from: number; to: number; count: number }[];
+  recent: { id: string; student: string; exam: string; at: string; status: string; score: number; totalScore: number; alert: boolean; risk: number | null }[];
+}
+const pct = (v: number | null | undefined) => (v == null ? '—' : `${Math.round(100 * v)} %`);
+const ago = (iso: string) => {
+  const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (m < 1) return 'à l’instant';
+  if (m < 60) return `il y a ${m} min`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `il y a ${h} h`;
+  return `il y a ${Math.round(h / 24)} j`;
+};
 
 type Option = { text: string; isCorrect: boolean; imageUrl: string };
 const blankOptions = (): Option[] => [{ text: '', isCorrect: false, imageUrl: '' }, { text: '', isCorrect: false, imageUrl: '' }];
@@ -44,16 +64,24 @@ export default function TeacherHome() {
   const [points, setPoints] = useState(1);
   const [options, setOptions] = useState<Option[]>(blankOptions);
 
+  // tableau de bord
+  const [overview, setOverview] = useState<Overview | null>(null);
+  const [me, setMe] = useState<string>('');
+
   useEffect(() => {
     fetchExams();
     fetch('/api/classes').then((r) => r.json()).then((data) => setClasses(data.classes || [])).catch(() => {});
+    fetch('/api/auth/me').then((r) => r.json()).then((d) => setMe(d.user?.name || '')).catch(() => {});
   }, []);
+
+  const fetchOverview = () => fetch('/api/teacher/overview', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).then((d) => d && setOverview(d)).catch(() => {});
 
   const fetchExams = async () => {
     try {
       const res = await fetch('/api/exams');
       const data = await res.json();
       if (res.ok) setExams(data.exams || []);
+      fetchOverview();
     } catch (err) {
       console.error(err);
     } finally {
@@ -152,19 +180,81 @@ export default function TeacherHome() {
 
   return (
     <AppShell role="TEACHER" active="exams" actions={<button onClick={() => setShowCreateModal(true)} className="eg-btn eg-btn-primary hidden sm:inline-flex"><Icon name="plus" className="h-4 w-4" />Nouvel examen</button>}>
-      <PageHeader eyebrow="Enseignement" title="Mes examens" subtitle="Créez, configurez et publiez vos évaluations avec plusieurs formats de questions."
-        actions={<button onClick={() => setShowCreateModal(true)} className="eg-btn eg-btn-primary sm:hidden"><Icon name="plus" className="h-4 w-4" />Nouvel examen</button>} />
-
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard label="Examens" value={stats.total} icon="exam" tone="brand" />
-        <StatCard label="Publiés" value={stats.published} icon="globe" tone="green" />
-        <StatCard label="Brouillons" value={stats.draft} icon="pen" tone="amber" />
-        <StatCard label="Questions au total" value={stats.questions} icon="help" tone="violet" />
+      {/* accueil : ce qui attend l'enseignant */}
+      <div className="relative overflow-hidden rounded-3xl eg-aurora p-6 text-white md:p-8">
+        <div className="eg-grid-bg absolute inset-0" />
+        <div className="relative flex flex-wrap items-center justify-between gap-6">
+          <div className="max-w-xl">
+            <p className="text-sm font-medium capitalize text-slate-300">{new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+            <h1 className="mt-1 text-2xl font-bold tracking-tight md:text-3xl">Bonjour{me ? `, ${me.split(' ')[0]}` : ''} 👋</h1>
+            <p className="mt-2 text-slate-300">
+              {overview && (overview.totals.pendingAlerts || overview.totals.toGrade)
+                ? <>Vous avez <strong className="text-white">{overview.totals.pendingAlerts} alerte{overview.totals.pendingAlerts > 1 ? 's' : ''}</strong> à examiner et <strong className="text-white">{overview.totals.toGrade} copie{overview.totals.toGrade > 1 ? 's' : ''}</strong> à corriger.</>
+                : 'Tout est à jour. Préparez votre prochain examen.'}
+            </p>
+            <div className="mt-5 flex flex-wrap gap-2">
+              {!!overview?.totals.pendingAlerts && <Link href="/teacher/surveillance" className="eg-btn bg-white text-ink-950 hover:bg-slate-100"><Icon name="shield" className="h-4 w-4" />Examiner les alertes<span className="rounded-full bg-rose-500 px-1.5 text-[10px] font-bold text-white">{overview.totals.pendingAlerts}</span></Link>}
+              {!!overview?.totals.toGrade && <Link href="/teacher/grading" className="eg-btn bg-white/10 text-white ring-1 ring-white/20 hover:bg-white/15"><Icon name="pen" className="h-4 w-4" />Corriger<span className="rounded-full bg-amber-400 px-1.5 text-[10px] font-bold text-ink-950">{overview.totals.toGrade}</span></Link>}
+              <button onClick={() => setShowCreateModal(true)} className="eg-btn bg-white/10 text-white ring-1 ring-white/20 hover:bg-white/15"><Icon name="plus" className="h-4 w-4" />Nouvel examen</button>
+            </div>
+          </div>
+          <div className="flex items-center gap-4 rounded-2xl bg-white/10 p-4 ring-1 ring-white/15 backdrop-blur">
+            <ProgressRing value={overview?.totals.average ?? 0} size={76} stroke={8} color="#22d3ee"><span className="text-white">{pct(overview?.totals.average).replace(' ', '')}</span></ProgressRing>
+            <div><p className="text-sm font-semibold">Moyenne des copies notées</p><p className="text-xs text-slate-300">{overview?.totals.submissions ?? 0} copie{(overview?.totals.submissions ?? 0) > 1 ? 's' : ''} remise{(overview?.totals.submissions ?? 0) > 1 ? 's' : ''}</p></div>
+          </div>
+        </div>
       </div>
+
+      <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatCard label="Copies remises" value={overview?.totals.submissions ?? '—'} icon="check" tone="brand" hint={overview ? `${overview.daily.slice(-7).reduce((s, d) => s + d.count, 0)} ces 7 derniers jours` : undefined} />
+        <StatCard label="Examens publiés" value={`${stats.published} / ${stats.total}`} icon="globe" tone="green" hint={`${stats.questions} questions au total`} />
+        <StatCard label="Alertes à examiner" value={overview?.totals.pendingAlerts ?? '—'} icon="alert" tone="red" />
+        <StatCard label="Copies à corriger" value={overview?.totals.toGrade ?? '—'} icon="pen" tone="amber" hint={overview?.totals.emptyDrafts ? `${overview.totals.emptyDrafts} brouillon(s) sans question` : undefined} />
+      </div>
+
+      {overview && (
+        <div className="mt-6 grid gap-5 xl:grid-cols-[1.25fr_1fr]">
+          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-1">
+            <section className="eg-card p-5">
+              <div className="mb-3 flex items-baseline justify-between gap-2"><h2 className="eg-h2">Copies remises — 14 derniers jours</h2><span className="text-xs text-slate-500">par jour</span></div>
+              <ColumnChart height={170} ariaLabel="Nombre de copies remises par jour sur les 14 derniers jours" valueHeader="Copies" labelEvery={2}
+                data={overview.daily.map((d) => { const dt = new Date(`${d.date}T12:00:00`); return { key: d.date, label: String(dt.getDate()), value: d.count, tip: dt.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' }) }; })} />
+            </section>
+            <section className="eg-card p-5">
+              <div className="mb-3 flex items-baseline justify-between gap-2"><h2 className="eg-h2">Répartition des notes</h2><span className="text-xs text-slate-500">copies notées, en % du total</span></div>
+              <ColumnChart height={170} ariaLabel="Nombre de copies par tranche de note" valueHeader="Copies"
+                data={overview.distribution.map((b) => ({ key: String(b.from), label: `${b.from}`, value: b.count, tip: `${b.from}–${b.to} %` }))} />
+            </section>
+          </div>
+          <section className="eg-card overflow-hidden">
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4"><h2 className="eg-h2">Activité récente</h2><Link href="/teacher/surveillance" className="text-xs font-semibold text-brand-600 hover:text-brand-700">Tout voir</Link></div>
+            {overview.recent.length === 0 ? <div className="p-5"><EmptyState icon="activity" title="Aucune copie remise" text="Les remises apparaîtront ici en temps réel." /></div> : (
+              <ul className="divide-y divide-slate-100">
+                {overview.recent.map((r) => (
+                  <li key={r.id} className="flex items-center gap-3 px-5 py-3">
+                    <Avatar name={r.student} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-slate-900">{r.student}</p>
+                      <p className="truncate text-xs text-slate-500">{r.exam} · {ago(r.at)}</p>
+                    </div>
+                    <div className="text-end">
+                      <p className="text-sm font-semibold tabular-nums text-slate-900">{r.score} / {r.totalScore}</p>
+                      {r.alert ? <span className="eg-badge eg-badge-red mt-0.5">Alerte {pct(r.risk)}</span> : r.status === 'SUBMITTED' ? <span className="eg-badge eg-badge-amber mt-0.5">À corriger</span> : <span className="eg-badge eg-badge-green mt-0.5">Notée</span>}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
+      )}
 
       {notice && <div className="eg-alert eg-alert-info mt-5 flex items-center justify-between gap-3">{notice}<button onClick={() => setNotice('')} aria-label="Fermer"><Icon name="x" className="h-4 w-4" /></button></div>}
 
-      <div className="mb-4 mt-8 flex flex-wrap items-center justify-between gap-3">
+      <div className="mb-4 mt-10 flex flex-wrap items-end justify-between gap-3">
+        <div><p className="eg-eyebrow">Enseignement</p><h2 className="mt-1 text-xl font-bold tracking-tight text-slate-900">Mes examens</h2></div>
+      </div>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="eg-segmented" role="group" aria-label="Filtrer">
           {([['all', 'Tous', stats.total], ['published', 'Publiés', stats.published], ['draft', 'Brouillons', stats.draft]] as const).map(([k, label, n]) => (
             <button key={k} onClick={() => setFilter(k)} aria-pressed={filter === k}>{label} <span className="ms-1 text-xs text-slate-400">{n}</span></button>
@@ -201,6 +291,25 @@ export default function TeacherHome() {
                   <span className="inline-flex items-center gap-1 rounded-lg bg-slate-50 px-2 py-1"><Icon name="target" className="h-3.5 w-3.5" />réussite {exam.passingScore} %</span>
                 </div>
                 {!nq && !exam.published && <p className="mt-3 text-xs text-rose-600">Ajoutez au moins une question avant de publier.</p>}
+                {(() => {
+                  const s = overview?.perExam.find((p) => p.id === exam.id);
+                  if (!s || !s.submissions) return <p className="mt-4 rounded-xl bg-slate-50 px-3 py-2.5 text-xs text-slate-500">Aucune copie remise pour l’instant.</p>;
+                  return (
+                    <div className="mt-4 rounded-xl bg-slate-50 p-3">
+                      <div className="grid grid-cols-3 gap-2 text-center">
+                        <div><p className="text-base font-bold text-slate-900">{s.submissions}</p><p className="text-[11px] text-slate-500">copies</p></div>
+                        <div><p className="text-base font-bold text-slate-900">{pct(s.average)}</p><p className="text-[11px] text-slate-500">moyenne</p></div>
+                        <div><p className={`text-base font-bold ${s.pendingAlerts ? 'text-rose-600' : 'text-slate-900'}`}>{s.alerts}</p><p className="text-[11px] text-slate-500">alerte{s.alerts > 1 ? 's' : ''}{s.pendingAlerts ? ` · ${s.pendingAlerts} à voir` : ''}</p></div>
+                      </div>
+                      {s.passRate != null && (
+                        <div className="mt-3">
+                          <div className="mb-1 flex justify-between text-[11px] text-slate-500"><span>Taux de réussite</span><span className="font-semibold text-slate-700">{pct(s.passRate)}</span></div>
+                          <Meter value={s.passRate} tone={s.passRate >= 0.5 ? 'green' : 'amber'} />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
                 <div className="mt-auto flex gap-2 pt-5">
                   <button onClick={() => openQuestions(exam)} className="eg-btn eg-btn-soft flex-1"><Icon name="layers" className="h-4 w-4" />Questions</button>
                   <button onClick={() => togglePublished(exam)} className={`eg-btn flex-1 ${exam.published ? 'eg-btn-secondary' : 'eg-btn-primary'}`}>

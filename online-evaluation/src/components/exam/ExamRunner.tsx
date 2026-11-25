@@ -5,6 +5,8 @@
 // ecran de revision avant remise. La surveillance (useProctoring) suit exactement la question affichee.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useProctoring } from '@/lib/use-proctoring';
+import { Icon } from '@/components/ui/Icon';
+import { LogoMark, ProgressRing } from '@/components/ui/kit';
 
 export interface RunnerOption { id: string; text: string; imageUrl?: string | null }
 export interface RunnerQuestion {
@@ -15,7 +17,7 @@ export interface RunnerQuestion {
   imageUrl?: string | null;
   options: RunnerOption[];
 }
-export interface RunnerExam { id: string; title: string; description?: string | null; questions: RunnerQuestion[] }
+export interface RunnerExam { id: string; title: string; description?: string | null; duration?: number; questions: RunnerQuestion[] }
 export interface SavedAnswer { questionId: string; selectedOptionId: string | null; textResponse: string | null }
 interface Result { score: number; totalScore: number; status: string }
 type Answer = { ids: string[]; text: string };
@@ -184,7 +186,10 @@ export default function ExamRunner({ exam, expiresAt, savedAnswers, consentWebca
 
   const unanswered = n - answeredCount;
   const flaggedCount = questions.filter((q) => flagged.has(q.id)).length;
-  const timerClass = secondsLeft <= 60 ? 'bg-rose-600 text-white animate-pulse' : secondsLeft <= 300 ? 'bg-amber-100 text-amber-800' : 'bg-slate-900 text-white';
+  const timerClass = secondsLeft <= 60 ? 'bg-rose-600 text-white animate-pulse' : secondsLeft <= 300 ? 'bg-amber-100 text-amber-900' : 'bg-white/10 text-white ring-1 ring-white/15';
+  // part du temps restant (anneau du minuteur) : duree de l'examen si connue, sinon temps restant a l'ouverture
+  const totalSeconds = useRef(Math.max(1, (exam.duration ?? 0) * 60 || secondsLeft));
+  const timeFraction = Math.min(1, secondsLeft / totalSeconds.current);
   const face = proctor.lastFrame;
   const faceStatus = !consentWebcam ? null
     : proctor.webcamStatus !== 'on' ? null
@@ -197,21 +202,23 @@ export default function ExamRunner({ exam, expiresAt, savedAnswers, consentWebca
   if (view === 'result' && result) {
     const pct = result.totalScore > 0 ? Math.round((100 * result.score) / result.totalScore) : 0;
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-50 via-white to-brand-50 p-6">
-        <div className="w-full max-w-md space-y-6 rounded-3xl bg-white p-8 text-center shadow-xl ring-1 ring-slate-200">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-3xl text-emerald-600">✓</div>
-          <div>
-            <h1 className="text-2xl font-black text-slate-900">Copie remise</h1>
-            <p className="mt-1 text-sm text-slate-500">{exam.title}</p>
+      <div className="relative flex min-h-screen items-center justify-center overflow-hidden eg-aurora p-6">
+        <div className="eg-grid-bg absolute inset-0" />
+        <div className="relative w-full max-w-md animate-fade-up rounded-3xl bg-white p-8 text-center shadow-2xl">
+          <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-emerald-500 text-white shadow-lg shadow-emerald-500/30"><Icon name="check" className="h-7 w-7" strokeWidth={2.6} /></span>
+          <h1 className="mt-5 text-2xl font-bold tracking-tight text-slate-900">Copie remise</h1>
+          <p className="mt-1 text-sm text-slate-500">{exam.title}</p>
+          <div className="mt-6 flex items-center justify-center gap-5 rounded-2xl bg-slate-50 p-5">
+            <ProgressRing value={result.status === 'GRADED' ? pct / 100 : 0} size={96} stroke={9} color={pct >= 50 ? '#10b981' : '#f59e0b'}>
+              <span className="text-lg">{result.status === 'GRADED' ? `${pct}%` : '…'}</span>
+            </ProgressRing>
+            <div className="text-start">
+              <p className="text-4xl font-bold tracking-tight text-slate-900">{result.score}<span className="text-xl text-slate-400"> / {result.totalScore}</span></p>
+              <p className="mt-1 text-sm text-slate-500">{result.status === 'GRADED' ? 'Corrigée automatiquement' : 'Réponses rédigées : correction par l’enseignant'}</p>
+            </div>
           </div>
-          <div className="rounded-2xl bg-slate-50 p-6">
-            <p className="text-5xl font-black text-slate-900">{result.score}<span className="text-2xl text-slate-400"> / {result.totalScore}</span></p>
-            <div className="mx-auto mt-4 h-2 w-full overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full bg-emerald-500" style={{ width: `${pct}%` }} /></div>
-            <p className="mt-3 text-sm text-slate-600">
-              {result.status === 'GRADED' ? `Corrigée automatiquement · ${pct} %` : 'En attente de correction par l’enseignant (réponses rédigées)'}
-            </p>
-          </div>
-          <button onClick={onClose} className="w-full rounded-xl bg-brand-600 px-6 py-3 font-bold text-white hover:bg-brand-700">Retour au tableau de bord</button>
+          <p className="mt-5 flex items-start gap-2 rounded-xl bg-brand-50 p-3 text-start text-xs text-brand-800"><Icon name="shield" className="mt-0.5 h-4 w-4 shrink-0" />Votre session a été analysée par ExamGuard AI. Un score de surveillance n’est jamais une preuve : votre enseignant décide.</p>
+          <button onClick={onClose} className="eg-btn eg-btn-primary eg-btn-lg mt-6 w-full">Retour au tableau de bord</button>
         </div>
       </div>
     );
@@ -219,26 +226,32 @@ export default function ExamRunner({ exam, expiresAt, savedAnswers, consentWebca
 
   // ------------------------------------------------------------------ examen
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 text-slate-900">
-      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3">
+    <div className="min-h-screen bg-[#f5f6fb] text-slate-900">
+      <header className="sticky top-0 z-30 bg-ink-950 text-white shadow-lg shadow-ink-950/10">
+        <div className="pointer-events-none absolute inset-0 eg-aurora opacity-40" />
+        <div className="relative mx-auto flex max-w-6xl items-center gap-4 px-4 py-3">
+          <LogoMark className="hidden h-9 w-9 sm:block" />
           <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Examen en cours</p>
-            <h1 className="truncate text-lg font-bold">{exam.title}</h1>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-glow-400">Examen en cours · {answeredCount}/{n} répondues</p>
+            <h1 className="truncate text-base font-semibold md:text-lg">{exam.title}</h1>
           </div>
-          <span className="hidden text-xs text-slate-500 sm:block" aria-live="polite">
-            {saveState === 'saving' ? 'Enregistrement…' : saveState === 'saved' && savedAt ? `✓ Enregistré à ${savedAt.toLocaleTimeString()}` : saveState === 'error' ? '⚠ Non enregistré — nouvel essai à la prochaine réponse' : 'Réponses enregistrées automatiquement'}
+          <span className={`hidden items-center gap-1.5 rounded-full px-3 py-1 text-xs sm:flex ${saveState === 'error' ? 'bg-rose-500/20 text-rose-200' : 'bg-white/10 text-slate-300'}`} aria-live="polite">
+            <Icon name={saveState === 'error' ? 'alert' : saveState === 'saving' ? 'refresh' : 'check'} className={`h-3.5 w-3.5 ${saveState === 'saving' ? 'animate-spin' : ''}`} />
+            {saveState === 'saving' ? 'Enregistrement…' : saveState === 'saved' && savedAt ? `Enregistré à ${savedAt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}` : saveState === 'error' ? 'Non enregistré — nouvel essai à la prochaine réponse' : 'Sauvegarde automatique'}
           </span>
-          <div className={`rounded-xl px-4 py-2 font-mono text-lg font-bold tabular-nums ${timerClass}`} role="timer" aria-label="Temps restant">{fmt(secondsLeft)}</div>
+          <div className={`flex items-center gap-2.5 rounded-2xl py-1.5 pe-3.5 ps-1.5 ${timerClass}`} role="timer" aria-label="Temps restant">
+            <ProgressRing value={timeFraction} size={34} stroke={4} color={secondsLeft <= 60 ? '#fff' : secondsLeft <= 300 ? '#d97706' : '#22d3ee'}><span /></ProgressRing>
+            <span className="font-mono text-lg font-bold tabular-nums">{fmt(secondsLeft)}</span>
+          </div>
         </div>
-        <div className="h-1 bg-slate-100"><div className="h-1 bg-brand-600 transition-all" style={{ width: `${(100 * answeredCount) / Math.max(n, 1)}%` }} /></div>
+        <div className="relative h-1 bg-white/10"><div className="h-1 bg-gradient-to-r from-brand-400 to-glow-400 transition-all" style={{ width: `${(100 * answeredCount) / Math.max(n, 1)}%` }} /></div>
       </header>
 
       <main className="mx-auto grid max-w-6xl gap-6 px-4 py-6 lg:grid-cols-[1fr_300px]">
         <section>
           {error && <div className="mb-4 rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{error}</div>}
           {view === 'question' && current ? (
-            <article className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200 md:p-8">
+            <article className="eg-card p-6 md:p-8 animate-fade-up">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="rounded-full bg-brand-50 px-3 py-1 text-sm font-semibold text-brand-700">Question {idx + 1} sur {n}</span>
                 <span className="text-xs font-medium text-slate-500">{TYPE_LABEL[current.questionType]} · {current.points} pt{current.points > 1 ? 's' : ''}</span>
@@ -253,7 +266,7 @@ export default function ExamRunner({ exam, expiresAt, savedAnswers, consentWebca
                     onChange={(e) => setAnswers((p) => ({ ...p, [current.id]: { ids: [], text: e.target.value } }))}
                     rows={8}
                     placeholder="Rédigez votre réponse…"
-                    className="w-full rounded-2xl border-2 border-slate-200 px-4 py-3 focus:border-brand-600 focus:outline-none"
+                    className="eg-input min-h-48 text-[15px] leading-relaxed"
                   />
                   <p className="mt-1 text-right text-xs text-slate-400">{(answers[current.id]?.text ?? '').length} caractères</p>
                 </div>
@@ -269,7 +282,7 @@ export default function ExamRunner({ exam, expiresAt, savedAnswers, consentWebca
                         role={current.questionType === 'MULTIPLE' ? 'checkbox' : 'radio'}
                         aria-checked={selected}
                         onClick={() => choose(current, o.id)}
-                        className={`group flex w-full items-center gap-4 rounded-2xl border-2 p-4 text-left transition ${selected ? 'border-brand-600 bg-brand-50 shadow-sm' : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'}`}
+                        className={`group flex w-full items-center gap-4 rounded-2xl p-4 text-start ring-1 transition duration-150 ${selected ? "bg-brand-50 ring-2 ring-brand-500 shadow-sm" : "bg-white ring-slate-200 hover:-translate-y-px hover:ring-brand-200 hover:shadow-sm"}`}
                       >
                         <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-bold ${selected ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200'}`}>{LETTERS[k]}</span>
                         <span className="flex-1">
@@ -284,7 +297,7 @@ export default function ExamRunner({ exam, expiresAt, savedAnswers, consentWebca
               )}
 
               <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-5">
-                <button onClick={() => go(idx - 1)} disabled={idx === 0} className="rounded-xl px-4 py-2.5 font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-30">← Précédente</button>
+                <button onClick={() => go(idx - 1)} disabled={idx === 0} className="eg-btn eg-btn-ghost disabled:opacity-30">← Précédente</button>
                 <button
                   onClick={() => toggleFlag(current.id)}
                   className={`rounded-xl px-4 py-2.5 text-sm font-semibold ${flagged.has(current.id) ? 'bg-amber-100 text-amber-800' : 'text-slate-500 hover:bg-slate-100'}`}
@@ -292,15 +305,19 @@ export default function ExamRunner({ exam, expiresAt, savedAnswers, consentWebca
                   {flagged.has(current.id) ? '★ À revoir' : '☆ Marquer à revoir'}
                 </button>
                 {idx < n - 1 ? (
-                  <button onClick={() => go(idx + 1)} className="rounded-xl bg-brand-600 px-5 py-2.5 font-bold text-white hover:bg-brand-700">Suivante →</button>
+                  <button onClick={() => go(idx + 1)} className="eg-btn eg-btn-primary">Suivante →</button>
                 ) : (
-                  <button onClick={() => setView('review')} className="rounded-xl bg-emerald-600 px-5 py-2.5 font-bold text-white hover:bg-emerald-700">Vérifier et remettre</button>
+                  <button onClick={() => setView('review')} className="eg-btn eg-btn-success">Vérifier et remettre</button>
                 )}
               </div>
-              <p className="mt-4 hidden text-center text-xs text-slate-400 md:block">Clavier : ← → naviguer · 1–{Math.min(9, Math.max(current.options.length, 1))} ou A–{LETTERS[Math.max(current.options.length - 1, 0)]} répondre · F marquer à revoir</p>
+              <p className="mt-4 hidden items-center justify-center gap-3 text-xs text-slate-400 md:flex">
+                <span><kbd className="rounded-md bg-slate-100 px-1.5 py-0.5 font-sans font-semibold text-slate-600 ring-1 ring-slate-200">←</kbd> <kbd className="rounded-md bg-slate-100 px-1.5 py-0.5 font-sans font-semibold text-slate-600 ring-1 ring-slate-200">→</kbd> naviguer</span>
+                {current.questionType !== 'TEXT_ESSAY' && <span><kbd className="rounded-md bg-slate-100 px-1.5 py-0.5 font-sans font-semibold text-slate-600 ring-1 ring-slate-200">A</kbd>–<kbd className="rounded-md bg-slate-100 px-1.5 py-0.5 font-sans font-semibold text-slate-600 ring-1 ring-slate-200">{LETTERS[Math.max(current.options.length - 1, 0)]}</kbd> répondre</span>}
+                <span><kbd className="rounded-md bg-slate-100 px-1.5 py-0.5 font-sans font-semibold text-slate-600 ring-1 ring-slate-200">F</kbd> à revoir</span>
+              </p>
             </article>
           ) : (
-            <article className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-slate-200 md:p-8">
+            <article className="eg-card p-6 md:p-8 animate-fade-up">
               <h2 className="text-2xl font-black">Vérifier avant de remettre</h2>
               <p className="mt-1 text-sm text-slate-500">Cliquez sur une question pour y revenir.</p>
               <div className="mt-6 grid grid-cols-3 gap-3">
@@ -321,15 +338,15 @@ export default function ExamRunner({ exam, expiresAt, savedAnswers, consentWebca
                 ))}
               </ul>
               <div className="mt-8 flex flex-wrap justify-between gap-3 border-t border-slate-100 pt-5">
-                <button onClick={() => go(idx)} className="rounded-xl px-4 py-2.5 font-semibold text-slate-600 hover:bg-slate-100">← Retour aux questions</button>
-                <button onClick={() => setConfirmOpen(true)} disabled={submitting} className="rounded-xl bg-emerald-600 px-6 py-2.5 font-bold text-white hover:bg-emerald-700 disabled:opacity-50">{submitting ? 'Remise…' : 'Remettre la copie'}</button>
+                <button onClick={() => go(idx)} className="eg-btn eg-btn-ghost">← Retour aux questions</button>
+                <button onClick={() => setConfirmOpen(true)} disabled={submitting} className="eg-btn eg-btn-success eg-btn-lg">{submitting ? 'Remise…' : 'Remettre la copie'}</button>
               </div>
             </article>
           )}
         </section>
 
         <aside className="space-y-4 lg:sticky lg:top-24 lg:h-fit">
-          <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+          <div className="eg-card p-5">
             <div className="flex items-center justify-between">
               <h3 className="font-bold">Questions</h3>
               <span className="text-xs text-slate-500">{answeredCount}/{n} répondues</span>
@@ -356,10 +373,10 @@ export default function ExamRunner({ exam, expiresAt, savedAnswers, consentWebca
               <span className="flex items-center gap-1"><span className="h-3 w-3 rounded bg-slate-200" /> sans réponse</span>
               <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full bg-amber-400" /> à revoir</span>
             </div>
-            <button onClick={() => setView('review')} className="mt-4 w-full rounded-xl border-2 border-emerald-600 px-4 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-50">Vérifier et remettre</button>
+            <button onClick={() => setView('review')} className="eg-btn mt-4 w-full bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100">Vérifier et remettre</button>
           </div>
 
-          <div className="rounded-3xl bg-slate-900 p-5 text-white shadow-sm">
+          <div className="relative overflow-hidden rounded-2xl bg-ink-950 p-5 text-white shadow-lg shadow-ink-950/10"><div className="pointer-events-none absolute inset-0 eg-aurora opacity-30" /><div className="relative">
             <div className="flex items-center gap-2 text-sm font-bold">
               <span className="relative flex h-2.5 w-2.5"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" /><span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400" /></span>
               Surveillance ExamGuard AI
@@ -373,13 +390,13 @@ export default function ExamRunner({ exam, expiresAt, savedAnswers, consentWebca
               <div className="flex justify-between gap-2"><dt>Temps par question</dt><dd className="text-white">mesuré</dd></div>
             </dl>
             <p className="mt-3 text-[11px] leading-relaxed text-slate-400">Seuls des indicateurs sont envoyés, jamais d’image ni de vidéo. Un score n’est pas une preuve : l’enseignant décide.</p>
-          </div>
+          </div></div>
         </aside>
       </main>
 
       {confirmOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" role="dialog" aria-modal="true" aria-labelledby="eg-confirm">
-          <div className="w-full max-w-sm space-y-4 rounded-3xl bg-white p-6 shadow-xl">
+        <div className="eg-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="eg-confirm">
+          <div className="eg-modal max-w-sm space-y-4">
             <h3 id="eg-confirm" className="text-xl font-black">Remettre la copie ?</h3>
             <p className="text-sm text-slate-600">
               {unanswered > 0 ? <><strong className="text-rose-600">{unanswered} question{unanswered > 1 ? 's' : ''} sans réponse.</strong> </> : 'Toutes les questions ont une réponse. '}
@@ -387,8 +404,8 @@ export default function ExamRunner({ exam, expiresAt, savedAnswers, consentWebca
               Vous ne pourrez plus modifier vos réponses.
             </p>
             <div className="flex justify-end gap-2">
-              <button onClick={() => setConfirmOpen(false)} className="rounded-xl px-4 py-2.5 font-semibold text-slate-600 hover:bg-slate-100">Annuler</button>
-              <button onClick={submit} className="rounded-xl bg-emerald-600 px-5 py-2.5 font-bold text-white hover:bg-emerald-700">Remettre</button>
+              <button onClick={() => setConfirmOpen(false)} className="eg-btn eg-btn-secondary">Annuler</button>
+              <button onClick={submit} className="eg-btn eg-btn-success">Remettre</button>
             </div>
           </div>
         </div>
