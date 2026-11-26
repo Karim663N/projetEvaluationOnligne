@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useDynamicText, useT, DynamicText } from '@/lib';
+import { Icon } from '@/components/ui/Icon';
+import { DynamicText, useT } from '@/lib/dynamic-text';
 
 interface RecommendedCourse {
   title: string;
@@ -17,27 +18,27 @@ interface AnalysisResult {
   recommendedCourses: RecommendedCourse[];
 }
 
-export default function CourseRecommender() {
-  const tPointsFort = useDynamicText('Key Strengths');
-  const tCompetences = useDynamicText('Compétences Clés');
-  const tPointsAmeliorer = useDynamicText('Axes d\'Amélioration');
-  const tFormations = useDynamicText('Formations Recommandées');
+const difficultyBadge = (difficulty: string) => {
+  switch (difficulty.toLowerCase()) {
+    case 'débutant': case 'beginner': return 'eg-badge-green';
+    case 'intermédiaire': case 'intermediate': return 'eg-badge-brand';
+    case 'avancé': case 'advanced': return 'eg-badge-red';
+    default: return 'eg-badge-slate';
+  }
+};
 
+const STEPS = ['Import du CV', 'Lecture par l’IA', 'Recommandations'];
+
+export default function CourseRecommender() {
+  const t = useT();
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AnalysisResult | null>(null);
-  const [, setHasCurrentCv] = useState(false);
-
-  const tTitle = useDynamicText('Title');
-  const tReason = useDynamicText('Reason');
-  const t = useT();
+  const [hasCurrentCv, setHasCurrentCv] = useState(false);
 
   useEffect(() => {
-    fetch('/api/student/cv?meta=1').then((res) => {
-      if (res.ok) return res.json();
-      throw new Error();
-    }).then((data) => setHasCurrentCv(Boolean(data.cvUrl))).catch(() => undefined);
+    fetch('/api/student/cv?meta=1').then((res) => { if (res.ok) return res.json(); throw new Error(); }).then((data) => setHasCurrentCv(Boolean(data.cvUrl))).catch(() => undefined);
   }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -56,189 +57,132 @@ export default function CourseRecommender() {
     }
   };
 
-  const getDifficultyColor = (difficulty: string) => {
-    switch (difficulty.toLowerCase()) {
-      case 'débutant':
-      case 'beginner':
-        return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
-      case 'intermédiaire':
-      case 'intermediate':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
-      case 'avancé':
-      case 'advanced':
-        return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300';
-      default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
-    }
+  const handleDrop = (e: React.DragEvent<HTMLLabelElement>) => {
+    e.preventDefault();
+    const dropped = e.dataTransfer.files[0];
+    if (dropped) handleFileChange({ target: { files: [dropped] } } as unknown as React.ChangeEvent<HTMLInputElement>);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!file) {
-      setError('Veuillez sélectionner un fichier CV au format PDF.');
-      return;
-    }
-
+    if (!file) { setError('Veuillez sélectionner un fichier CV au format PDF.'); return; }
     setLoading(true);
     setError(null);
-
     try {
       const formData = new FormData();
       formData.append('file', file);
-
       const uploadRes = await fetch('/api/student/cv', { method: 'POST', body: formData });
       const uploadData = await uploadRes.json();
       if (!uploadRes.ok) throw new Error(uploadData.error || 'Impossible d\'enregistrer le CV');
       setHasCurrentCv(true);
-
-      const res = await fetch('/api/recommend-courses', {
-        method: 'POST',
-        body: formData,
-      });
-
+      const res = await fetch('/api/recommend-courses', { method: 'POST', body: formData });
       const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Erreur lors de l\'analyse du CV');
-      }
-
+      if (!res.ok || !data.success) throw new Error(data.error || 'Erreur lors de l\'analyse du CV');
       setResult(data.data);
     } catch (err: unknown) {
-      const errorObj = err as Error;
-      setError(errorObj.message || 'Une erreur inattendue est survenue.');
+      setError((err as Error).message || 'Une erreur inattendue est survenue.');
     } finally {
       setLoading(false);
     }
   };
 
+  const step = result ? 3 : loading ? 2 : file ? 1 : 0;
+
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <div className="max-w-4xl mx-auto px-4 py-10 space-y-8">
-        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 p-6 md:p-8">
-          <h1 className="text-2xl font-black bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
-            {tTitle}
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
-            {tReason}
-          </p>
-
-          <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
-            <label
-              htmlFor="cvUpload"
-              className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 p-8 text-center hover:border-emerald-400 hover:bg-emerald-50/30 transition-all"
-            >
-              <svg className="w-10 h-10 text-slate-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-              </svg>
-              <span className="text-sm font-medium text-slate-600 dark:text-slate-300">
-                {tPointsFort}
-              </span>
-              <span className="text-xs text-slate-400 dark:text-slate-500">
-                {tCompetences}
-              </span>
-            </label>
-            <input
-              id="cvUpload"
-              type="file"
-              accept=".pdf"
-              onChange={handleFileChange}
-              className="hidden"
-            />
-            {error && <p className="text-sm text-rose-600 dark:text-rose-400"><DynamicText text={error} /></p>}
-            <button
-              type="submit"
-              disabled={!file || loading}
-              className="rounded-xl bg-emerald-600 px-6 py-3 font-bold text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 disabled:opacity-50 transition-all"
-            >
-              {loading ? t('Analyse en cours...') : t('Analyser le CV')}
-            </button>
-          </form>
-        </div>
-
-        {result && (
-          <div className="space-y-8 animate-fade-in">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 p-6">
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center">
-                  <span className="w-3 h-3 bg-green-500 rounded-full mr-2"></span>
-                  {tPointsFort}
-                </h3>
-                <ul className="space-y-2">
-                  {result.pointsForts?.map((point, index) => (
-                    <li key={index} className="flex items-start text-sm text-gray-600 dark:text-gray-300">
-                      <svg className="w-5 h-5 text-green-500 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                      </svg>
-                      <DynamicText text={point} />
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 p-6">
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center">
-                  <span className="w-3 h-3 bg-indigo-500 rounded-full mr-2"></span>
-                  {tCompetences}
-                </h3>
-                <div className="flex flex-wrap gap-2">
-                  {result.competences?.map((comp, index) => (
-                    <span key={index} className="px-3 py-1 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 rounded-full text-xs font-medium border border-indigo-100 dark:border-indigo-900">
-                      <DynamicText text={comp} />
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 p-6">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center">
-                <span className="w-3 h-3 bg-amber-500 rounded-full mr-2"></span>
-                {tPointsAmeliorer}
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {result.pointsAmeliorer?.map((point, index) => (
-                  <div key={index} className="p-4 rounded-xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/30 text-sm text-amber-900 dark:text-amber-200 flex items-start">
-                    <svg className="w-5 h-5 text-amber-500 mr-2 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
-                    <DynamicText text={point} />
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center">
-                <svg className="w-6 h-6 text-indigo-600 dark:text-indigo-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                </svg>
-                {tFormations}
-              </h3>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {result.recommendedCourses?.map((course, index) => (
-                  <div key={index} className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 p-6 flex flex-col justify-between hover:border-indigo-500/50 transition-all">
-                    <div>
-                      <div className="flex items-start justify-between gap-4 mb-3">
-                        <h4 className="font-bold text-gray-900 dark:text-white text-lg"><DynamicText text={course.title} /></h4>
-                        <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${getDifficultyColor(course.difficulty)}`}>
-                          <DynamicText text={course.difficulty} />
-                        </span>
-                      </div>
-                      <p className="text-sm text-gray-600 dark:text-gray-300 mb-4"><DynamicText text={course.reason} /></p>
-                    </div>
-                    <div className="pt-4 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                      <span className="font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 px-2.5 py-1 rounded-lg">
-                        {t('Focus:')} <DynamicText text={course.focusArea} />
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+    <div className="space-y-6">
+      <div className="grid gap-5 lg:grid-cols-[1.3fr_1fr]">
+        <form onSubmit={handleSubmit} className="eg-card p-6">
+          <div className="flex items-start gap-4">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-brand-500 to-violet-500 text-white shadow-lg shadow-brand-500/30"><Icon name="sparkles" /></span>
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">{t('Analyse IA de votre CV')}</h2>
+              <p className="text-sm text-slate-500">{t('Importez votre CV (PDF) pour obtenir un bilan personnalisé et des formations adaptées.')}</p>
             </div>
           </div>
-        )}
+          <label onDragOver={(e) => e.preventDefault()} onDrop={handleDrop}
+            className={`mt-5 flex h-44 w-full cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed text-center transition ${file ? 'border-brand-300 bg-brand-50/60' : 'border-slate-300 bg-slate-50/60 hover:border-brand-300 hover:bg-brand-50/40'}`}>
+            <span className={`grid h-12 w-12 place-items-center rounded-2xl ${file ? 'bg-brand-600 text-white' : 'bg-white text-slate-400 ring-1 ring-slate-200'}`}><Icon name={file ? 'check' : 'upload'} /></span>
+            {file ? <p className="mt-3 text-sm font-semibold text-brand-700">{file.name}</p> : (
+              <>
+                <p className="mt-3 text-sm text-slate-600"><span className="font-semibold text-slate-900">{t('Cliquez pour importer')}</span> {t('ou glissez-déposez')}</p>
+                <p className="mt-0.5 text-xs text-slate-400">{t('PDF · 10 Mo maximum')}</p>
+              </>
+            )}
+            <input type="file" className="hidden" accept="application/pdf" onChange={handleFileChange} />
+          </label>
+          {error && <div className="eg-alert eg-alert-error mt-4"><DynamicText text={error} /></div>}
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+            {hasCurrentCv ? <a href="/api/student/cv" target="_blank" rel="noopener noreferrer" className="eg-btn eg-btn-ghost eg-btn-sm"><Icon name="external" className="h-3.5 w-3.5" />{t('Voir mon CV actuel')}</a> : <span />}
+            <button type="submit" disabled={loading || !file} className="eg-btn eg-btn-primary">
+              {loading ? <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />{t('Analyse en cours…')}</> : <><Icon name="sparkles" className="h-4 w-4" />{t('Analyser et recommander')}</>}
+            </button>
+          </div>
+        </form>
+
+        <div className="relative overflow-hidden rounded-2xl eg-aurora p-6 text-white">
+          <div className="eg-grid-bg absolute inset-0" />
+          <div className="relative">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-glow-400">{t('Comment ça marche')}</p>
+            <ol className="mt-4 space-y-4">
+              {STEPS.map((s, i) => (
+                <li key={s} className="flex items-center gap-3">
+                  <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-bold ${i < step ? 'bg-emerald-400 text-ink-950' : i === step ? 'bg-white text-ink-950' : 'bg-white/10 text-slate-300 ring-1 ring-white/15'}`}>
+                    {i < step ? <Icon name="check" className="h-4 w-4" strokeWidth={2.6} /> : i + 1}
+                  </span>
+                  <span className={`text-sm ${i <= step ? 'font-semibold text-white' : 'text-slate-400'}`}>{t(s)}</span>
+                </li>
+              ))}
+            </ol>
+            <p className="mt-6 text-xs leading-relaxed text-slate-300">{t('Votre CV est analysé par Gemini uniquement à votre demande. Les recommandations sont indicatives : parlez-en avec vos enseignants.')}</p>
+          </div>
+        </div>
       </div>
+
+      {result && (
+        <div className="space-y-5 animate-fade-up">
+          <div className="grid gap-5 md:grid-cols-2">
+            <section className="eg-card p-6">
+              <h3 className="eg-h2 flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-lg bg-emerald-50 text-emerald-600"><Icon name="trending" className="h-4 w-4" /></span>{t('Points forts')}</h3>
+              <ul className="mt-4 space-y-2.5">
+                {result.pointsForts?.map((point, index) => (
+                  <li key={index} className="flex items-start gap-2.5 text-sm text-slate-700"><Icon name="check" className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" strokeWidth={2.4} /><DynamicText text={point} /></li>
+                ))}
+              </ul>
+            </section>
+            <section className="eg-card p-6">
+              <h3 className="eg-h2 flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-lg bg-brand-50 text-brand-600"><Icon name="zap" className="h-4 w-4" /></span>{t('Compétences clés')}</h3>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {result.competences?.map((comp, index) => <span key={index} className="eg-badge eg-badge-brand py-1"><DynamicText text={comp} /></span>)}
+              </div>
+            </section>
+          </div>
+
+          <section className="eg-card p-6">
+            <h3 className="eg-h2 flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-lg bg-amber-50 text-amber-600"><Icon name="target" className="h-4 w-4" /></span>{t('Axes d’amélioration')}</h3>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {result.pointsAmeliorer?.map((point, index) => (
+                <div key={index} className="flex items-start gap-2.5 rounded-xl bg-amber-50/70 p-3.5 text-sm text-amber-900 ring-1 ring-amber-100"><Icon name="alert" className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" /><DynamicText text={point} /></div>
+              ))}
+            </div>
+          </section>
+
+          <section>
+            <h3 className="mb-3 flex items-center gap-2 text-lg font-semibold text-slate-900"><Icon name="book" className="h-5 w-5 text-brand-600" />{t('Formations recommandées')}</h3>
+            <div className="grid gap-4 md:grid-cols-2">
+              {result.recommendedCourses?.map((course, index) => (
+                <article key={index} className="eg-card eg-card-hover flex flex-col p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <h4 className="font-semibold text-slate-900"><DynamicText text={course.title} /></h4>
+                    <span className={`eg-badge ${difficultyBadge(course.difficulty)}`}><DynamicText text={course.difficulty} /></span>
+                  </div>
+                  <p className="mt-2 text-sm text-slate-600"><DynamicText text={course.reason} /></p>
+                  <p className="mt-auto pt-4"><span className="eg-badge eg-badge-slate">{t('Axe :')} <DynamicText text={course.focusArea} /></span></p>
+                </article>
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }

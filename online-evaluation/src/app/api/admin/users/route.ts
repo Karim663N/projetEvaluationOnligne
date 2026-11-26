@@ -68,7 +68,22 @@ export async function DELETE(request: Request) {
     }
     if (userId === admin.id) return NextResponse.json({ error: "You cannot delete your own account" }, { status: 400 });
 
-    await prisma.user.delete({ where: { id: userId } });
+    // MongoDB : pas de suppression en cascade. On nettoie les donnees liees.
+    const submissions = await prisma.submission.findMany({ where: { userId }, select: { id: true } });
+    const submissionIds = submissions.map((s) => s.id);
+    const proctoringReports = submissionIds.length
+      ? await prisma.proctoringReport.findMany({ where: { submissionId: { in: submissionIds } }, select: { id: true } })
+      : [];
+    await prisma.$transaction([
+      prisma.proctoringReport.deleteMany({ where: { id: { in: proctoringReports.map((r) => r.id) } } }),
+      prisma.answer.deleteMany({ where: { submissionId: { in: submissionIds } } }),
+      prisma.submission.deleteMany({ where: { userId } }),
+      prisma.classEnrollment.deleteMany({ where: { userId } }),
+      prisma.userBadge.deleteMany({ where: { userId } }),
+      prisma.certificate.deleteMany({ where: { userId } }),
+      prisma.auditLog.updateMany({ where: { actorId: userId }, data: { actorId: null } }),
+      prisma.user.delete({ where: { id: userId } }),
+    ]);
     await writeAuditLog(admin.id, "USER_DELETED", userId);
 
     return NextResponse.json({ message: "User deleted successfully" }, { status: 200 });

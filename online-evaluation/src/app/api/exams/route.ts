@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
@@ -8,32 +7,63 @@ export async function GET() {
   try {
     const user = await getCurrentUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    let where: Prisma.ExamWhereInput;
-    if (user.role === "ADMIN") {
-      where = {};
-    } else if (user.role === "TEACHER") {
-      where = { createdById: user.id };
-    } else {
+
+    // Etudiant : examens sans classe + examens des classes ou il est inscrit (APPROVED).
+    let studentClassIds: string[] = [];
+    if (user.role === "STUDENT") {
       const enrollments = await prisma.classEnrollment.findMany({
         where: { userId: user.id, status: "APPROVED" },
         select: { classId: true },
       });
-      const classIds = enrollments.map((e) => e.classId);
-      where = { published: true, OR: [{ classId: null }, { classId: { in: classIds } }] };
+      studentClassIds = enrollments.map((e) => e.classId);
     }
 
-    const exams = await prisma.exam.findMany({ where });
+    const exams = await prisma.exam.findMany({
+      where:
+        user.role === "ADMIN"
+          ? {}
+          : user.role === "TEACHER"
+            ? { createdById: user.id }
+            : {
+                published: true,
+                OR: [{ classId: null }, { classId: { in: studentClassIds } }],
+              },
+      orderBy: { createdAt: "desc" },
+    });
     const examIds = exams.map((e) => e.id);
-    const questions = examIds.length
-      ? await prisma.question.findMany({ where: { examId: { in: examIds } }, select: { examId: true } })
-      : [];
-    const questionCount = new Map<string, number>();
-    for (const q of questions) questionCount.set(q.examId, (questionCount.get(q.examId) || 0) + 1);
-    const examsWithCount = exams.map((exam) => ({
+
+    const [questions, creators, mySubmissions] = await Promise.all([
+      prisma.question.findMany({ where: { examId: { in: examIds } }, select: { examId: true } }),
+      prisma.user.findMany({
+        where: { id: { in: exams.map((e) => e.createdById) } },
+        select: { id: true, name: true },
+      }),
+      user.role === "STUDENT"
+        ? prisma.submission.findMany({
+            where: { examId: { in: examIds }, userId: user.id },
+            select: { examId: true, status: true, score: true, totalScore: true },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const questionCounts = new Map<string, number>();
+    for (const q of questions) questionCounts.set(q.examId, (questionCounts.get(q.examId) ?? 0) + 1);
+    const creatorMap = new Map(creators.map((c) => [c.id, c]));
+    const submissionsByExam = new Map<string, typeof mySubmissions>();
+    for (const s of mySubmissions) {
+      const list = submissionsByExam.get(s.examId) ?? [];
+      list.push(s);
+      submissionsByExam.set(s.examId, list);
+    }
+
+    const result = exams.map((exam) => ({
       ...exam,
-      _count: { questions: questionCount.get(exam.id) || 0 },
+      createdBy: creatorMap.get(exam.createdById) ?? null,
+      _count: { questions: questionCounts.get(exam.id) ?? 0 },
+      ...(user.role === "STUDENT" ? { submissions: submissionsByExam.get(exam.id) ?? [] } : {}),
     }));
-    return NextResponse.json({ exams: examsWithCount }, { status: 200 });
+
+    return NextResponse.json({ exams: result }, { status: 200 });
   } catch (error) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

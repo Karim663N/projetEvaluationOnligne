@@ -2,26 +2,73 @@
 
 import { useEffect, useState } from 'react';
 import type { AuditLogView } from '@/lib/types';
-import { DynamicText, useT } from '@/lib/i18n-context';
-import WorkspaceSidebar from '@/components/WorkspaceSidebar';
-
-const ADMIN_NAV = [
-  { href: '/admin/home', icon: '👥', label: 'User Management', color: 'purple' as const },
-  { href: '/admin/classes', icon: '🏛️', label: 'Class Management', color: 'sky' as const },
-  { href: '/admin/certificates', icon: '📜', label: 'Certificate Templates', color: 'amber' as const },
-  { href: '/admin/badges', icon: '🏆', label: 'Achievement Badges', color: 'emerald' as const },
-  { href: '/admin/system', icon: '⚙️', label: 'System Settings & Logs', color: 'orange' as const },
-];
+import { useRoleGuard } from '@/lib/use-role-guard';
+import AppShell from '@/components/shell/AppShell';
+import { Icon } from '@/components/ui/Icon';
+import { Avatar, EmptyState, PageHeader } from '@/components/ui/kit';
+import { DynamicText, useT } from '@/lib/dynamic-text';
+import { useLang } from '@/lib/use-lang';
 
 export default function AdminSystemPage() {
+  useRoleGuard('ADMIN');
   const t = useT();
+  const [lang] = useLang();
+  const locale = lang === 'ar' ? 'ar' : lang === 'en' ? 'en-GB' : 'fr-FR';
   const [settings, setSettings] = useState({ platformName: 'Online Evaluation', supportEmail: '', maintenanceMode: 'false' });
-  const [logs, setLogs] = useState<AuditLogView[]>([]); const [notice, setNotice] = useState('');
-  const refresh = async () => { const [s, l] = await Promise.all([fetch('/api/admin/settings'), fetch('/api/admin/logs')]); const sd = await s.json(); const ld = await l.json(); if (s.ok) setSettings(sd.settings); if (l.ok) setLogs(ld.logs); };
+  const [logs, setLogs] = useState<AuditLogView[]>([]);
+  const [notice, setNotice] = useState('');
+  const refresh = async () => {
+    const [s, l] = await Promise.all([fetch('/api/admin/settings'), fetch('/api/admin/logs')]);
+    const sd = await s.json(); const ld = await l.json();
+    if (s.ok) setSettings(sd.settings);
+    if (l.ok) setLogs(ld.logs);
+  };
   useEffect(() => { refresh(); }, []);
-  const save = async (event: React.FormEvent) => { event.preventDefault(); const res = await fetch('/api/admin/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...settings, maintenanceMode: settings.maintenanceMode === 'true' }) }); const data = await res.json(); setNotice(res.ok ? 'Platform settings saved.' : data.error || 'Could not save settings'); if (res.ok) refresh(); };
-  return <div className="flex h-screen overflow-hidden bg-slate-50 text-slate-900"><WorkspaceSidebar title="Admin HQ" accent="purple" items={ADMIN_NAV} /><main className="flex-1 p-6 md:p-10 overflow-y-auto"><div className="mx-auto max-w-6xl space-y-8"><header><h1 className="mt-2 text-4xl font-bold">{t('Platform settings & activity')}</h1><p className="text-slate-500">{t('Configure platform contact details and review recent administrative actions.')}</p></header>
-    <form onSubmit={save} className="space-y-4 rounded-2xl border bg-white p-6 shadow-sm"><h2 className="text-xl font-bold">{t('General settings')}</h2><div className="grid gap-4 md:grid-cols-2"><label className="text-sm font-semibold">{t('Platform name')}<input value={settings.platformName} onChange={e => setSettings({ ...settings, platformName: e.target.value })} required minLength={2} maxLength={80} className="mt-1 block w-full rounded-lg border px-3 py-2"/></label><label className="text-sm font-semibold">{t('Support email')}<input type="email" value={settings.supportEmail} onChange={e => setSettings({ ...settings, supportEmail: e.target.value })} className="mt-1 block w-full rounded-lg border px-3 py-2"/></label></div><div><label className="flex items-center gap-3 text-sm font-semibold"><input type="checkbox" checked={settings.maintenanceMode === 'true'} onChange={e => setSettings({ ...settings, maintenanceMode: String(e.target.checked) })}/>{t('Maintenance mode')}</label><p className="mt-1 text-xs text-slate-500">{t('Blocks new sign-ins and registration. Students with an active exam can finish and submit it.')}</p></div><div className="flex items-center gap-4"><button className="rounded-lg bg-violet-700 px-5 py-2 font-semibold text-white">{t('Save settings')}</button><span className="text-sm text-violet-700"><DynamicText text={notice} /></span></div></form>
-    <section className="rounded-2xl border bg-white p-6 shadow-sm"><div className="flex items-center justify-between"><div><h2 className="text-xl font-bold">{t('Recent activity')}</h2><p className="text-sm text-slate-500">{t('Latest 100 administrative and classroom actions.')}</p></div><button onClick={refresh} className="rounded-lg border px-3 py-2 text-sm">{t('Refresh')}</button></div><div className="mt-4 divide-y">{logs.map(log => <div key={log.id} className="grid gap-1 py-3 sm:grid-cols-[1fr_auto]"><div><p className="font-semibold"><DynamicText text={log.action.replaceAll('_', ' ')} /></p><p className="text-sm text-slate-500">{log.actor?.name || t('Former user')}{log.target ? ` · ${log.target}` : ''}{log.details ? ` · ` : ''}{log.details ? <DynamicText text={log.details} /> : null}</p></div><time className="text-xs text-slate-500">{new Date(log.createdAt).toLocaleString()}</time></div>)}{logs.length === 0 && <p className="py-6 text-center text-sm text-slate-500">{t('No activity recorded yet.')}</p>}</div></section>
-  </div></main></div>;
+  const save = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const res = await fetch('/api/admin/settings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...settings, maintenanceMode: settings.maintenanceMode === 'true' }) });
+    const data = await res.json(); setNotice(res.ok ? t('Paramètres enregistrés.') : data.error || t('Enregistrement impossible')); if (res.ok) refresh();
+  };
+  const maintenance = settings.maintenanceMode === 'true';
+
+  return (
+    <AppShell role="ADMIN" active="system">
+      <PageHeader eyebrow={t('Système')} title={t('Paramètres & journal')} subtitle={t('Configurez la plateforme et consultez les dernières actions administratives.')} />
+      <div className="grid gap-5 lg:grid-cols-[1fr_1.4fr]">
+        <form onSubmit={save} className="eg-card h-fit space-y-4 p-6">
+          <p className="eg-h2">{t('Paramètres généraux')}</p>
+          <label className="block"><span className="eg-label">{t('Nom de la plateforme')}</span><input value={settings.platformName} onChange={(e) => setSettings({ ...settings, platformName: e.target.value })} required minLength={2} maxLength={80} className="eg-input" /></label>
+          <label className="block"><span className="eg-label">{t('E-mail du support')}</span><input type="email" value={settings.supportEmail} onChange={(e) => setSettings({ ...settings, supportEmail: e.target.value })} className="eg-input" /></label>
+          <div className={`flex items-start justify-between gap-4 rounded-xl p-4 ring-1 ${maintenance ? 'bg-amber-50 ring-amber-200' : 'bg-slate-50 ring-slate-200'}`}>
+            <div><p className="text-sm font-semibold text-slate-900">{t('Mode maintenance')}</p><p className="mt-0.5 text-xs text-slate-500">{t('Bloque les connexions et inscriptions. Un étudiant en cours d’examen peut terminer et remettre sa copie.')}</p></div>
+            <button type="button" role="switch" aria-checked={maintenance} onClick={() => setSettings({ ...settings, maintenanceMode: String(!maintenance) })}
+              className={`relative h-6 w-11 shrink-0 rounded-full transition ${maintenance ? 'bg-amber-500' : 'bg-slate-300'}`}>
+              <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${maintenance ? 'start-[22px]' : 'start-0.5'}`} />
+            </button>
+          </div>
+          <div className="flex items-center gap-3 border-t border-slate-100 pt-4"><button className="eg-btn eg-btn-primary">{t('Enregistrer')}</button>{notice && <span className="text-sm font-medium text-emerald-700"><DynamicText text={notice} /></span>}</div>
+        </form>
+        <section className="eg-card overflow-hidden">
+          <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+            <div><p className="eg-h2">{t('Activité récente')}</p><p className="text-sm text-slate-500">{t('100 dernières actions')}</p></div>
+            <button onClick={refresh} className="eg-btn eg-btn-secondary eg-btn-sm"><Icon name="refresh" className="h-3.5 w-3.5" />{t('Actualiser')}</button>
+          </div>
+          {logs.length === 0 ? <div className="p-5"><EmptyState icon="activity" title={t('Aucune activité enregistrée')} /></div> : (
+            <ol className="max-h-[600px] divide-y divide-slate-100 overflow-y-auto">
+              {logs.map((log) => (
+                <li key={log.id} className="flex items-start gap-3 px-5 py-3">
+                  <Avatar name={log.actor?.name || '?'} className="h-8 w-8 text-xs" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold capitalize text-slate-900"><DynamicText text={log.action.replaceAll('_', ' ').toLowerCase()} /></p>
+                    <p className="truncate text-xs text-slate-500">{log.actor?.name || t('Ancien utilisateur')}{log.target ? ` · ${log.target}` : ''}{log.details ? ` · ${log.details}` : ''}</p>
+                  </div>
+                  <time className="shrink-0 text-xs text-slate-400">{new Date(log.createdAt).toLocaleString(locale)}</time>
+                </li>
+              ))}
+            </ol>
+          )}
+        </section>
+      </div>
+    </AppShell>
+  );
 }

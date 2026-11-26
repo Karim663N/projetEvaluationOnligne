@@ -1,6 +1,6 @@
 /**
- * In-memory cache for dynamic translations.
- * Key format: `${targetLang}:${text}` -> Promise<string>
+ * Cache en memoire pour les traductions dynamiques.
+ * Cle : `${targetLang}:${text}` -> Promise<string>
  */
 const translationCache = new Map<string, Promise<string>>();
 
@@ -21,17 +21,13 @@ export type TranslateResponse = [
 export type TranslateSegment = [string, string, string];
 
 export interface TranslateOptions {
-  /** The source language (defaults to 'auto'). */
+  /** Langue source (par defaut 'auto'). */
   sourceLang?: string;
 }
 
 /**
- * Translate arbitrary text using the public Google Translate endpoint.
- *
- * @param text The text to translate.
- * @param targetLang The target language code (e.g. 'en', 'fr', 'ar').
- * @param options Optional source language configuration.
- * @returns The translated text, or the original text if translation fails.
+ * Traduit un texte arbitraire via l'endpoint public Google Translate.
+ * Retourne le texte original en cas d'echec.
  */
 export async function translateDynamic(
   text: string,
@@ -41,7 +37,6 @@ export async function translateDynamic(
   const normalizedText = text.trim();
   const sourceLang = options.sourceLang || 'auto';
 
-  // Fallback: empty or target language is auto
   if (!normalizedText || targetLang === 'auto') {
     return normalizedText;
   }
@@ -74,16 +69,12 @@ export async function translateDynamic(
 
       const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sourceLang}&tl=${targetLang}&dt=t&q=${encodeURIComponent(normalizedText)}`;
 
-      console.log('[TranslateDebug]', { text: normalizedText, targetLang, url });
-
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 8000);
 
       let data: TranslateResponse;
       try {
         const response = await fetch(url, { signal: controller.signal });
-
-        console.log('[TranslateDebugResponse]', { status: response.status, ok: response.ok });
 
         if (!response.ok) {
           throw new Error(`Google Translate HTTP error: ${response.status}`);
@@ -111,8 +102,7 @@ export async function translateDynamic(
       }
 
       return translatedText;
-    } catch (err) {
-      console.error('[TranslateDebugError]', err);
+    } catch {
       return normalizedText;
     }
   })();

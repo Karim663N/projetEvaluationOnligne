@@ -1,6 +1,5 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
-import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 const jwtSecret = process.env.JWT_SECRET;
@@ -22,33 +21,6 @@ export async function verifyToken(token: string) {
   } catch (error) {
     return null;
   }
-}
-
-export const AUTH_COOKIE_NAME = "token";
-const AUTH_COOKIE_MAX_AGE = 60 * 60 * 24; // 24h, matches JWT expiry
-
-export function setAuthCookie(response: NextResponse, token: string) {
-  response.cookies.set({
-    name: AUTH_COOKIE_NAME,
-    value: token,
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
-    maxAge: AUTH_COOKIE_MAX_AGE,
-    path: "/",
-  });
-}
-
-export function clearAuthCookie(response: NextResponse) {
-  response.cookies.set({
-    name: AUTH_COOKIE_NAME,
-    value: "",
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
-    expires: new Date(0),
-    path: "/",
-  });
 }
 
 export async function getCurrentUser() {

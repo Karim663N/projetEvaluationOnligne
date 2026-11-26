@@ -3,137 +3,83 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { Icon } from '@/components/ui/Icon';
+import AuthLayout, { Field } from '@/components/shell/AuthLayout';
+import { useT } from '@/lib/dynamic-text';
+
+const ROLES = [
+  { value: 'STUDENT', icon: 'cap', title: 'Étudiant', text: 'Passer des examens' },
+  { value: 'TEACHER', icon: 'pen', title: 'Enseignant', text: 'Créer et surveiller' },
+] as const;
 
 export default function RegisterPage() {
+  const t = useT();
   const router = useRouter();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState('STUDENT');
+  const [role, setRole] = useState<'STUDENT' | 'TEACHER'>('STUDENT');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const strength = Math.min(4, [password.length >= 6, password.length >= 10, /[A-Z]/.test(password) && /[a-z]/.test(password), /\d|[^\w]/.test(password)].filter(Boolean).length);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
-
     try {
       const res = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, email, password, role }),
       });
-
       const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Registration failed');
-      }
-
-      // Redirect based on role
-      if (role === 'ADMIN') router.push('/admin/home');
-      else if (role === 'TEACHER') router.push('/teacher/home');
-      else router.push('/student/home');
+      if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : 'Inscription impossible');
+      router.push(role === 'TEACHER' ? '/teacher/home' : '/student/home');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Registration failed. Please try again.');
-    } finally {
+      setError(err instanceof Error ? err.message : 'Inscription impossible. Réessayez.');
       setLoading(false);
     }
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
-      <div className="w-full max-w-md space-y-8 rounded-xl bg-white p-8 shadow-lg">
+    <AuthLayout
+      title="Créer un compte"
+      subtitle="Rejoignez la plateforme d’évaluation de l’ITBS en moins d’une minute."
+      footer={<>{t('Déjà inscrit ?')} <Link href="/login" className="font-semibold text-brand-600 hover:text-brand-700">{t('Se connecter')}</Link></>}
+    >
+      <form onSubmit={handleRegister} className="space-y-5">
+        {error && <div role="alert" className="eg-alert eg-alert-error flex items-start gap-2"><Icon name="alert" className="mt-0.5 h-4 w-4 shrink-0" />{error}</div>}
         <div>
-          <h2 className="text-center text-3xl font-extrabold text-gray-900">
-            Create an Account
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            Or{' '}
-            <Link
-              href="/login"
-              className="font-medium text-blue-600 hover:text-blue-500"
-            >
-              sign in to your existing account
-            </Link>
-          </p>
+          <span className="eg-label">{t('Je suis')}</span>
+          <div className="grid grid-cols-2 gap-3" role="radiogroup">
+            {ROLES.map((r) => (
+              <button key={r.value} type="button" role="radio" aria-checked={role === r.value} onClick={() => setRole(r.value)}
+                className={`flex items-center gap-3 rounded-xl p-3 text-start ring-1 transition ${role === r.value ? 'bg-brand-50 ring-2 ring-brand-500' : 'bg-white ring-slate-200 hover:ring-slate-300'}`}>
+                <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${role === r.value ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-500'}`}><Icon name={r.icon} className="h-[18px] w-[18px]" /></span>
+                <span><span className="block text-sm font-semibold text-slate-900">{t(r.title)}</span><span className="block text-xs text-slate-500">{t(r.text)}</span></span>
+              </button>
+            ))}
+          </div>
         </div>
-
-        {error && (
-          <div className="rounded-md bg-red-50 p-4 text-sm text-red-700">
-            {error}
+        <Field label="Nom complet" icon="user">
+          <input type="text" required autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} placeholder={t('Prénom Nom')} className="eg-input ps-10" />
+        </Field>
+        <Field label="Adresse e-mail" icon="mail">
+          <input type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="vous@itbs.tn" className="eg-input ps-10" />
+        </Field>
+        <Field label="Mot de passe" icon="lock" hint="6 caractères minimum.">
+          <input type="password" required minLength={6} autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className="eg-input ps-10" />
+        </Field>
+        {password && (
+          <div className="flex items-center gap-2" aria-label={t('Robustesse du mot de passe')}>
+            {[0, 1, 2, 3].map((i) => <span key={i} className={`h-1.5 flex-1 rounded-full ${i < strength ? ['bg-rose-500', 'bg-amber-500', 'bg-lime-500', 'bg-emerald-500'][strength - 1] : 'bg-slate-200'}`} />)}
+            <span className="w-14 text-end text-xs font-medium text-slate-500">{t(['Faible', 'Faible', 'Moyen', 'Bon', 'Fort'][strength])}</span>
           </div>
         )}
-
-        <form className="mt-8 space-y-6" onSubmit={handleRegister}>
-          <div className="space-y-4 rounded-md shadow-sm">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Full Name
-              </label>
-              <input
-                type="text"
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
-                placeholder="John Doe"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Email Address
-              </label>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
-                placeholder="you@example.com"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Password (min 6 characters)
-              </label>
-              <input
-                type="password"
-                required
-                minLength={6}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
-                placeholder="••••••••"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Role
-              </label>
-              <select
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
-              >
-                <option value="STUDENT">Student</option>
-                <option value="TEACHER">Teacher</option>
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="group relative flex w-full justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
-            >
-              {loading ? 'Creating account...' : 'Register'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <button type="submit" disabled={loading} className="eg-btn eg-btn-primary eg-btn-lg w-full">
+          {loading ? <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" /> {t('Création du compte…')}</> : <>{t('Créer mon compte')} <Icon name="arrowRight" className="h-4 w-4" /></>}
+        </button>
+      </form>
+    </AuthLayout>
   );
 }

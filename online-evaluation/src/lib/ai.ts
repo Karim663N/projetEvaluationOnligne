@@ -26,7 +26,6 @@ Réponds en Markdown strict, avec exactement ces sections dans cet ordre :
 ## 1️⃣ Points Forts
 ## 2️⃣ Compétences
 ## 3️⃣ Formations Recommandées
-## 📌 Conclusion
 Règles de style : sois extremely concis. Chaque puce et chaque paragraphe doit tenir en 1 à 2 phrases maximum. Pas de longs développements.
 Sous "## 3️⃣ Formations Recommandées", chaque formation DOIT être une ligne de liste à puces dont le titre est un lien Markdown cliquable au format [Titre de la formation](https://...) pointant vers une URL de recherche ou page de cours réelle (ex: https://www.coursera.org/search?query=... ou https://www.udemy.com/courses/search/?q=...), suivie d'une brève justification d'une phrase.
 Règles de structure : utilise des listes à puces sous chaque section, une séparation claire entre les sections, et n'écris aucun texte en dehors de ces sections.`;

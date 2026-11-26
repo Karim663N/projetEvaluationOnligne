@@ -17,30 +17,33 @@ const questionSchema = z.object({
   })).default([]),
 });
 
+async function getExamWithQuestions(id: string) {
+  const exam = await prisma.exam.findUnique({ where: { id } });
+  if (!exam) return null;
+  const questions = await prisma.question.findMany({ where: { examId: id }, orderBy: { createdAt: "asc" } });
+  const options = await prisma.option.findMany({ where: { questionId: { in: questions.map((q) => q.id) } } });
+  const optionsByQuestion = new Map<string, typeof options>();
+  for (const o of options) {
+    const list = optionsByQuestion.get(o.questionId) ?? [];
+    list.push(o);
+    optionsByQuestion.set(o.questionId, list);
+  }
+  return {
+    ...exam,
+    questions: questions.map((q) => ({ ...q, options: optionsByQuestion.get(q.id) ?? [] })),
+  };
+}
+
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const user = await getCurrentUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    const exam = await prisma.exam.findUnique({ where: { id } });
+    const exam = await getExamWithQuestions(id);
 
     if (!exam) {
       return NextResponse.json({ error: "Exam not found" }, { status: 404 });
     }
-    const questions = await prisma.question.findMany({ where: { examId: id } });
-    const options = questions.length
-      ? await prisma.option.findMany({ where: { questionId: { in: questions.map((q) => q.id) } } })
-      : [];
-    const optionsByQuestion = new Map<string, typeof options>();
-    for (const opt of options) {
-      const list = optionsByQuestion.get(opt.questionId) || [];
-      list.push(opt);
-      optionsByQuestion.set(opt.questionId, list);
-    }
-    const examWithQuestions = {
-      ...exam,
-      questions: questions.map((q) => ({ ...q, options: optionsByQuestion.get(q.id) || [] })),
-    };
     const hasActiveAttempt = user.role === "STUDENT"
       ? Boolean(await prisma.submission.findFirst({ where: { examId: id, userId: user.id, status: "IN_PROGRESS" }, select: { id: true } }))
       : false;
@@ -52,12 +55,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       if (enrollment?.status !== "APPROVED") return NextResponse.json({ error: "Exam not found" }, { status: 404 });
     }
     const safeExam = user.role === "STUDENT" ? {
-      ...examWithQuestions,
-      questions: examWithQuestions.questions.map(({ options, ...question }) => ({
+      ...exam,
+      questions: exam.questions.map(({ options, ...question }) => ({
         ...question,
         options: options.map(({ id, text, imageUrl }) => ({ id, text, imageUrl })),
       })),
-    } : examWithQuestions;
+    } : exam;
     return NextResponse.json({ exam: safeExam }, { status: 200 });
   } catch {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
@@ -107,20 +110,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         questionType: type,
       },
     });
-    if (type !== "TEXT_ESSAY") {
-      await prisma.option.createMany({
-        data: options.map((opt) => ({
-          questionId: question.id,
-          text: opt.text.trim(),
-          imageUrl: isUploadedImagePath(opt.imageUrl) ? opt.imageUrl : null,
-          isCorrect: !!opt.isCorrect,
-        })),
-      });
-    }
-    const questionOptions = await prisma.option.findMany({ where: { questionId: question.id } });
+    const createdOptions = type === "TEXT_ESSAY" ? [] : await Promise.all(
+      options.map((opt) =>
+        prisma.option.create({
+          data: {
+            questionId: question.id,
+            text: opt.text.trim(),
+            imageUrl: isUploadedImagePath(opt.imageUrl) ? opt.imageUrl : null,
+            isCorrect: !!opt.isCorrect,
+          },
+        })
+      )
+    );
     await writeAuditLog(user.id, "QUESTION_CREATED", examId, text.trim());
 
-    return NextResponse.json({ message: "Question added successfully", question: { ...question, options: questionOptions } }, { status: 201 });
+    return NextResponse.json({ message: "Question added successfully", question: { ...question, options: createdOptions } }, { status: 201 });
   } catch {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

@@ -9,6 +9,7 @@ export async function GET() {
     if (user.role !== "STUDENT") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     const certificates = await prisma.certificate.findMany({
       where: { userId: user.id },
+      select: { id: true, code: true, examTitle: true, description: true, issuerName: true, issuedAt: true },
       orderBy: { issuedAt: "desc" },
     });
     return NextResponse.json({ certificates }, { status: 200 });

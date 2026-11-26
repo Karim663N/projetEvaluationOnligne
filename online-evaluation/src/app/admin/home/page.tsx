@@ -1,16 +1,22 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRoleGuard } from '@/lib/use-role-guard';
 import type { AdminUser, PlatformAnalytics } from '@/lib/types';
-import { useLang, useT } from '@/lib';
-import WorkspaceSidebar from '@/components/WorkspaceSidebar';
+import AppShell from '@/components/shell/AppShell';
+import { Icon } from '@/components/ui/Icon';
+import { Avatar, EmptyState, PageHeader, StatCard } from '@/components/ui/kit';
+import { useT } from '@/lib/dynamic-text';
+import { useLang } from '@/lib/use-lang';
+
+const ROLE_BADGE: Record<string, string> = { ADMIN: 'eg-badge-red', TEACHER: 'eg-badge-brand', STUDENT: 'eg-badge-green' };
+const ROLE_LABEL: Record<string, string> = { ADMIN: 'Administrateur', TEACHER: 'Enseignant', STUDENT: 'Étudiant' };
 
 export default function AdminHome() {
   useRoleGuard('ADMIN');
-  const lang = useLang();
   const t = useT();
-
+  const [lang] = useLang();
+  const locale = lang === 'ar' ? 'ar' : lang === 'en' ? 'en-GB' : 'fr-FR';
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -19,7 +25,7 @@ export default function AdminHome() {
 
   useEffect(() => {
     fetchUsers();
-    fetch('/api/admin/analytics').then(r => r.json()).then(data => setAnalytics(data)).catch(() => {});
+    fetch('/api/admin/analytics').then((r) => r.json()).then((data) => setAnalytics(data)).catch(() => {});
   }, []);
 
   const fetchUsers = async () => {
@@ -35,157 +41,79 @@ export default function AdminHome() {
   };
 
   const handleRoleChange = async (userId: string, role: string) => {
-    try {
-      const res = await fetch('/api/admin/users', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, role }),
-      });
-      if (res.ok) fetchUsers();
-    } catch (err) {
-      console.error(err);
-    }
+    const res = await fetch('/api/admin/users', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId, role }) });
+    if (res.ok) fetchUsers();
   };
-
   const handleStatusChange = async (userId: string, isActive: boolean) => {
     const res = await fetch('/api/admin/users', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId, isActive }) });
     if (res.ok) fetchUsers();
   };
-
   const handleDeleteUser = async (userId: string) => {
-    if (!confirm('Are you sure you want to delete this user?')) return;
-    try {
-      const res = await fetch(`/api/admin/users?userId=${userId}`, {
-        method: 'DELETE',
-      });
-      if (res.ok) fetchUsers();
-    } catch (err) {
-      console.error(err);
-    }
+    if (!confirm(t('Supprimer définitivement cet utilisateur ?'))) return;
+    const res = await fetch(`/api/admin/users?userId=${userId}`, { method: 'DELETE' });
+    if (res.ok) fetchUsers();
   };
 
+  const shown = users.filter((u) => (roleFilter === 'ALL' || u.role === roleFilter) && `${u.name} ${u.email}`.toLowerCase().includes(search.toLowerCase()));
+  const byRole = (r: string) => users.filter((u) => u.role === r).length;
+
   return (
-    <div className={`flex h-screen overflow-hidden bg-slate-50 text-slate-900 ${lang === 'ar' ? 'rtl' : 'ltr'}`} dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-      <WorkspaceSidebar
-        title="Admin HQ"
-        accent="purple"
-        items={[
-          { href: '/admin/home', icon: '👥', label: 'User Management', color: 'purple' },
-          { href: '/admin/classes', icon: '🏛️', label: 'Class Management', color: 'sky' },
-          { href: '/admin/certificates', icon: '📜', label: 'Certificate Templates', color: 'amber' },
-          { href: '/admin/badges', icon: '🏆', label: 'Achievement Badges', color: 'emerald' },
-          { href: '/admin/system', icon: '⚙️', label: 'System Settings & Logs', color: 'orange' },
-        ]}
-      />
+    <AppShell role="ADMIN" active="users">
+      <PageHeader eyebrow={t('Plateforme')} title={t('Vue d’ensemble')} subtitle={t('Suivez l’activité de la plateforme et gérez les comptes.')} />
 
-      <main className="flex-1 p-8 overflow-y-auto">
-        <div className="mx-auto w-full max-w-6xl">
-        <header className="flex justify-between items-center mb-8">
-          <div>
-            <h2 className="text-3xl font-black text-slate-900">{t('Dashboard Overview')}</h2>
-            <p className="text-slate-500 font-medium text-sm">{t('Monitor platform activity and manage users.')}</p>
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatCard label={t('Étudiants')} value={analytics?.students ?? '—'} icon="cap" tone="green" />
+        <StatCard label={t('Enseignants')} value={analytics?.teachers ?? '—'} icon="pen" tone="brand" />
+        <StatCard label={t('Examens publiés')} value={analytics?.publishedExams ?? '—'} icon="exam" tone="violet" />
+        <StatCard label={t('Copies remises')} value={analytics?.submissions ?? '—'} icon="check" tone="amber" />
+      </div>
+
+      <div className="eg-card mt-7 overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+          <div><p className="eg-h2">{t('Annuaire des utilisateurs')}</p><p className="text-sm text-slate-500">{users.length} {t(users.length > 1 ? 'comptes' : 'compte')}</p></div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="eg-segmented" role="group" aria-label={t('Filtrer par rôle')}>
+              {([['ALL', 'Tous'], ['STUDENT', 'Étudiants'], ['TEACHER', 'Enseignants'], ['ADMIN', 'Admins']] as const).map(([k, l]) => (
+                <button key={k} onClick={() => setRoleFilter(k)} aria-pressed={roleFilter === k}>{t(l)} <span className="ms-1 text-xs text-slate-400">{k === 'ALL' ? users.length : byRole(k)}</span></button>
+              ))}
+            </div>
+            <div className="relative">
+              <Icon name="search" className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('Nom ou e-mail…')} className="eg-input w-60 ps-9" aria-label={t('Rechercher un utilisateur')} />
+            </div>
           </div>
-        </header>
-
-        {analytics && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-              <div className="text-slate-400 font-bold text-xs uppercase tracking-wider mb-1">{t('Students')}</div>
-              <div className="text-4xl font-black text-slate-900">{analytics.students}</div>
-            </div>
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-              <div className="text-slate-400 font-bold text-xs uppercase tracking-wider mb-1">{t('Teachers')}</div>
-              <div className="text-4xl font-black text-slate-900">{analytics.teachers}</div>
-            </div>
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-              <div className="text-slate-400 font-bold text-xs uppercase tracking-wider mb-1">{t('Published Exams')}</div>
-              <div className="text-4xl font-black text-slate-900">{analytics.publishedExams}</div>
-            </div>
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-              <div className="text-slate-400 font-bold text-xs uppercase tracking-wider mb-1">{t('Submissions')}</div>
-              <div className="text-4xl font-black text-slate-900">{analytics.submissions}</div>
-            </div>
+        </div>
+        {loading ? <div className="h-48 animate-pulse bg-slate-50" /> : shown.length === 0 ? <div className="p-5"><EmptyState icon="users" title={t('Aucun utilisateur')} text={t('Modifiez la recherche ou le filtre.')} /></div> : (
+          <div className="overflow-x-auto">
+            <table className="eg-table">
+              <thead><tr><th>{t('Utilisateur')}</th><th>{t('Rôle')}</th><th>{t('Statut')}</th><th>{t('Inscrit le')}</th><th className="text-end">{t('Actions')}</th></tr></thead>
+              <tbody>
+                {shown.map((u) => (
+                  <tr key={u.id}>
+                    <td>
+                      <div className="flex items-center gap-3"><Avatar name={u.name} /><div className="min-w-0"><p className="truncate font-semibold text-slate-900">{u.name}</p><p className="truncate text-xs text-slate-500">{u.email}</p></div></div>
+                    </td>
+                    <td>
+                      <div className="flex items-center gap-2">
+                        <span className={`eg-badge ${ROLE_BADGE[u.role] ?? 'eg-badge-slate'}`}>{t(ROLE_LABEL[u.role] ?? u.role)}</span>
+                        <select value={u.role} onChange={(e) => handleRoleChange(u.id, e.target.value)} className="eg-input w-auto py-1 text-xs" aria-label={`${t('Rôle de')} ${u.name}`}>
+                          <option value="STUDENT">{t('Étudiant')}</option><option value="TEACHER">{t('Enseignant')}</option><option value="ADMIN">{t('Admin')}</option>
+                        </select>
+                      </div>
+                    </td>
+                    <td><span className={`eg-badge ${u.isActive ? 'eg-badge-green' : 'eg-badge-slate'}`}><span className={`h-1.5 w-1.5 rounded-full ${u.isActive ? 'bg-emerald-500' : 'bg-slate-400'}`} />{u.isActive ? t('Actif') : t('Bloqué')}</span></td>
+                    <td className="whitespace-nowrap text-slate-500">{u.createdAt ? new Date(u.createdAt).toLocaleDateString(locale) : '—'}</td>
+                    <td className="whitespace-nowrap text-end">
+                      <button onClick={() => handleStatusChange(u.id, !u.isActive)} className={`eg-btn eg-btn-sm ${u.isActive ? 'eg-btn-ghost text-amber-700' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}>{u.isActive ? t('Bloquer') : t('Activer')}</button>
+                      <button onClick={() => handleDeleteUser(u.id)} className="ms-1 rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600" aria-label={`${t('Supprimer')} ${u.name}`}><Icon name="trash" className="h-4 w-4" /></button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
-
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="p-6 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <h3 className="text-xl font-bold text-slate-900">{t('User Directory')}</h3>
-            <div className="flex gap-3 w-full sm:w-auto">
-              <input
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder={t('Search by name or email...')}
-                className="flex-1 sm:w-80 rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-600 font-medium"
-              />
-              <select
-                value={roleFilter}
-                onChange={e => setRoleFilter(e.target.value)}
-                className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-purple-600 font-medium"
-              >
-                <option value="ALL">{t('All Roles')}</option>
-                <option value="ADMIN">{t('Admins')}</option>
-                <option value="TEACHER">{t('Teachers')}</option>
-                <option value="STUDENT">{t('Students')}</option>
-              </select>
-            </div>
-          </div>
-
-          {loading ? (
-            <div className="p-8 text-center text-slate-400">{t('Loading users...')}</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-slate-200">
-                <thead className="bg-slate-50">
-                  <tr>
-                    <th className="px-6 py-4 text-left text-xs font-black text-slate-500 uppercase tracking-wider">{t('User')}</th>
-                    <th className="px-6 py-4 text-left text-xs font-black text-slate-500 uppercase tracking-wider">{t('Email')}</th>
-                    <th className="px-6 py-4 text-left text-xs font-black text-slate-500 uppercase tracking-wider">{t('Role')}</th>
-                    <th className="px-6 py-4 text-right text-xs font-black text-slate-500 uppercase tracking-wider">{t('Actions')}</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-slate-100">
-                  {users.filter(u => (roleFilter === 'ALL' || u.role === roleFilter) && `${u.name} ${u.email}`.toLowerCase().includes(search.toLowerCase())).map((u) => (
-                    <tr key={u.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="font-bold text-slate-900">{u.name}</div>
-                        <div className="text-xs text-slate-400">{t('Joined:')} {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : 'N/A'}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-600">{u.email}</td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <select
-                          value={u.role}
-                          onChange={(e) => handleRoleChange(u.id, e.target.value)}
-                          className="rounded-xl border border-slate-300 px-3 py-1.5 text-sm bg-white font-bold text-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-600"
-                        >
-                          <option value="STUDENT">{t('STUDENT')}</option>
-                          <option value="TEACHER">{t('TEACHER')}</option>
-                          <option value="ADMIN">{t('ADMIN')}</option>
-                        </select>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <button
-                          onClick={() => handleStatusChange(u.id, !u.isActive)}
-                          className={`mr-4 font-bold ${u.isActive ? 'text-amber-600 hover:text-amber-700' : 'text-emerald-600 hover:text-emerald-700'}`}
-                        >
-                          {u.isActive ? t('Block Account') : t('Activate Account')}
-                        </button>
-                        <button
-                          onClick={() => handleDeleteUser(u.id)}
-                          className="text-rose-600 hover:text-rose-800 font-bold"
-                        >
-                          {t('Delete')}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-        </div>
-      </main>
-    </div>
+      </div>
+    </AppShell>
   );
 }

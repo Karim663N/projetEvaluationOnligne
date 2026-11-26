@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
-import { signToken, setAuthCookie } from "@/lib/auth";
-import { rateLimit, clientKey } from "@/lib/rate-limit";
+import { signToken } from "@/lib/auth";
 import { z } from "zod";
 
 const registerSchema = z.object({
@@ -14,14 +13,6 @@ const registerSchema = z.object({
 
 export async function POST(request: Request) {
   try {
-    const limit = rateLimit(clientKey(request, "register"), 10, 15 * 60 * 1000);
-    if (!limit.ok) {
-      return NextResponse.json(
-        { error: "Too many registration attempts. Please try again later." },
-        { status: 429, headers: { "Retry-After": String(limit.retryAfterSec) } }
-      );
-    }
-
     const body = await request.json();
     const result = registerSchema.safeParse(body);
 
@@ -58,7 +49,15 @@ export async function POST(request: Request) {
       { status: 201 }
     );
 
-    setAuthCookie(response, token);
+    response.cookies.set({
+      name: "token",
+      value: token,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 86400, // 1 day
+      path: "/",
+    });
 
     return response;
   } catch (error) {

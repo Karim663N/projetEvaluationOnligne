@@ -13,11 +13,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     if (!certificate) return Response.json({ error: "Certificate not found" }, { status: 404 });
     const student = await prisma.user.findUnique({ where: { id: user.id }, select: { name: true } });
     const pdf = createCertificatePdf({
-      studentName: student?.name || "Student",
+      studentName: student?.name ?? "",
       certificateTitle: certificate.examTitle,
       description: certificate.description,
       issuerName: certificate.issuerName,
-      signatureDataUrl: certificate.signatureDataUrl,
       issuedAt: certificate.issuedAt,
       code: certificate.code,
     });

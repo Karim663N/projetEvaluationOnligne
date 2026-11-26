@@ -1,8 +1,7 @@
  import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
-import { signToken, setAuthCookie } from "@/lib/auth";
-import { rateLimit, clientKey } from "@/lib/rate-limit";
+import { signToken } from "@/lib/auth";
 import { z } from "zod";
 
 const loginSchema = z.object({
@@ -13,14 +12,6 @@ const loginSchema = z.object({
 
 export async function POST(request: Request) {
   try {
-    const limit = rateLimit(clientKey(request, "login"), 10, 15 * 60 * 1000);
-    if (!limit.ok) {
-      return NextResponse.json(
-        { error: "Too many login attempts. Please try again later." },
-        { status: 429, headers: { "Retry-After": String(limit.retryAfterSec) } }
-      );
-    }
-
     const body = await request.json();
     const result = loginSchema.safeParse(body);
 
@@ -53,11 +44,20 @@ export async function POST(request: Request) {
       { status: 200 }
     );
 
-    setAuthCookie(response, token);
+    response.cookies.set({
+      name: "token",
+      value: token,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 86400, // 1 day
+      path: "/",
+    });
 
     return response;
   } catch (err: unknown) {
-    console.error("Login error:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    const errorObj = err as Error;
+    console.error("Login 500 error:", errorObj);
+    return NextResponse.json({ error: errorObj.message || "Internal server error" }, { status: 500 });
   }
 }

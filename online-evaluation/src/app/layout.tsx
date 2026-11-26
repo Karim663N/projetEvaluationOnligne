@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { LanguageProvider } from "@/lib/i18n-context";
 import "./globals.css";
+import DocumentTitle from "@/components/DocumentTitle";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ExamGuard Studio",
-  description: "Plateforme d'évaluation et de gestion des examens",
+  title: "ITBS · Évaluation en ligne — ExamGuard AI",
+  description: "Examens en ligne surveillés et expliqués : détection de comportements suspects, validation par l'enseignant.",
 };
 
 export default function RootLayout({
@@ -24,13 +24,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="fr">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased text-slate-900`}
       >
-        <LanguageProvider>
-          {children}
-        </LanguageProvider>
+        <DocumentTitle />
+        {children}
       </body>
     </html>
   );

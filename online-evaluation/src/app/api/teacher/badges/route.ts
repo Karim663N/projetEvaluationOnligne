@@ -3,17 +3,20 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { isUploadedImagePath } from "@/lib/uploads";
 
+async function badgesWithCounts() {
+  const badges = await prisma.badge.findMany({ orderBy: { name: "asc" } });
+  const userBadges = await prisma.userBadge.findMany({ select: { badgeId: true } });
+  const countMap = new Map<string, number>();
+  for (const ub of userBadges) countMap.set(ub.badgeId, (countMap.get(ub.badgeId) ?? 0) + 1);
+  return badges.map((b) => ({ ...b, _count: { users: countMap.get(b.id) ?? 0 } }));
+}
+
 export async function GET() {
   try {
     const user = await getCurrentUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     if (user.role !== "TEACHER" && user.role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    const badges = await prisma.badge.findMany({ orderBy: { name: "asc" } });
-    const badgeIds = badges.map((b) => b.id);
-    const userBadges = badgeIds.length ? await prisma.userBadge.findMany({ where: { badgeId: { in: badgeIds } }, select: { badgeId: true } }) : [];
-    const countByBadge = new Map<string, number>();
-    for (const ub of userBadges) countByBadge.set(ub.badgeId, (countByBadge.get(ub.badgeId) || 0) + 1);
-    return NextResponse.json({ badges: badges.map((b) => ({ ...b, _count: { users: countByBadge.get(b.id) || 0 } })) }, { status: 200 });
+    return NextResponse.json({ badges: await badgesWithCounts() }, { status: 200 });
   } catch { return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
 }
 

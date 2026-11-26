@@ -9,51 +9,65 @@ export async function GET() {
     if (user.role !== "TEACHER" && user.role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const classes = await prisma.schoolClass.findMany({
-      where: user.role === "TEACHER" ? { teacherId: user.id } : undefined,
+      where: user.role === "TEACHER" ? { teacherId: user.id } : {},
+      select: { id: true, name: true },
     });
     const classIds = classes.map((c) => c.id);
-    const classNameById = new Map(classes.map((c) => [c.id, c.name]));
+    const classNameMap = new Map(classes.map((c) => [c.id, c.name]));
 
     const enrollments = classIds.length
       ? await prisma.classEnrollment.findMany({ where: { classId: { in: classIds }, status: "APPROVED" }, select: { classId: true, userId: true } })
       : [];
     const studentIds = [...new Set(enrollments.map((e) => e.userId))];
 
-    const students = studentIds.length
-      ? await prisma.user.findMany({
-          where: { id: { in: studentIds }, role: "STUDENT" },
-          select: { id: true, name: true, email: true, avatarUrl: true, cvUrl: true },
-        })
-      : [];
-    const userBadges = studentIds.length
-      ? await prisma.userBadge.findMany({ where: { userId: { in: studentIds } } })
-      : [];
+    const [students, userBadges, submissions] = await Promise.all([
+      prisma.user.findMany({
+        where: { id: { in: studentIds }, role: "STUDENT" },
+        select: { id: true, name: true, email: true, avatarUrl: true, cvUrl: true },
+      }),
+      prisma.userBadge.findMany({ where: { userId: { in: studentIds } } }),
+      prisma.submission.findMany({
+        where: { userId: { in: studentIds } },
+        select: { id: true, userId: true, examId: true, score: true, totalScore: true, status: true },
+      }),
+    ]);
     const badgeIds = [...new Set(userBadges.map((ub) => ub.badgeId))];
-    const badges = badgeIds.length
-      ? await prisma.badge.findMany({ where: { id: { in: badgeIds } } })
-      : [];
-
+    const examIds = [...new Set(submissions.map((s) => s.examId))];
+    const [badges, exams] = await Promise.all([
+      prisma.badge.findMany({ where: { id: { in: badgeIds } } }),
+      prisma.exam.findMany({ where: { id: { in: examIds } }, select: { id: true, title: true } }),
+    ]);
     const badgeMap = new Map(badges.map((b) => [b.id, b]));
+    const examMap = new Map(exams.map((e) => [e.id, e]));
+
     const badgesByUser = new Map<string, typeof userBadges>();
     for (const ub of userBadges) {
-      const list = badgesByUser.get(ub.userId) || [];
+      const list = badgesByUser.get(ub.userId) ?? [];
       list.push(ub);
       badgesByUser.set(ub.userId, list);
     }
+    const submissionsByUser = new Map<string, typeof submissions>();
+    for (const s of submissions) {
+      const list = submissionsByUser.get(s.userId) ?? [];
+      list.push(s);
+      submissionsByUser.set(s.userId, list);
+    }
+
     const classNamesByUser = new Map<string, string[]>();
     for (const e of enrollments) {
-      const list = classNamesByUser.get(e.userId) || [];
-      const name = classNameById.get(e.classId);
+      const list = classNamesByUser.get(e.userId) ?? [];
+      const name = classNameMap.get(e.classId);
       if (name) list.push(name);
       classNamesByUser.set(e.userId, list);
     }
 
-    const studentsList = students.map((s) => ({
-      ...s,
-      classNames: classNamesByUser.get(s.id) || [],
-      badges: (badgesByUser.get(s.id) || []).map((ub) => ({ badge: badgeMap.get(ub.badgeId) || null })),
+    const result = students.map((student) => ({
+      ...student,
+      badges: (badgesByUser.get(student.id) ?? []).map((ub) => ({ ...ub, badge: badgeMap.get(ub.badgeId) ?? null })),
+      submissions: (submissionsByUser.get(student.id) ?? []).map((s) => ({ ...s, exam: examMap.get(s.examId) ?? null })),
+      classNames: classNamesByUser.get(student.id) ?? [],
     }));
 
-    return NextResponse.json({ students: studentsList }, { status: 200 });
+    return NextResponse.json({ students: result }, { status: 200 });
   } catch { return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
 }

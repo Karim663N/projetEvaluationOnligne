@@ -17,16 +17,27 @@ export async function POST() {
 
     const studentUser = await prisma.user.findUnique({
       where: { id: user.id },
-      select: { cvData: true, cvUrl: true },
+      select: { cvData: true, cvUrl: true, cvFile: true },
     });
 
-    if (!studentUser?.cvData && !studentUser?.cvUrl) {
+    if (!studentUser?.cvData && !studentUser?.cvUrl && !studentUser?.cvFile) {
       return NextResponse.json({ success: false, error: 'Aucun CV enregistré. Veuillez d\'abord importer votre CV.' }, { status: 400 });
     }
 
     let resumeText = studentUser.cvData || '';
 
-    if (!resumeText && studentUser.cvUrl) {
+    if (!resumeText && studentUser.cvFile) {
+      try {
+        resumeText = await extractPdfText(Buffer.from(studentUser.cvFile));
+        if (resumeText) {
+          await prisma.user.update({ where: { id: user.id }, data: { cvData: resumeText } }).catch(() => undefined);
+        }
+      } catch (e) {
+        console.error('Error extracting text from CV stored in MongoDB:', e);
+      }
+    }
+
+    if (!resumeText && studentUser.cvUrl && studentUser.cvUrl !== '/api/student/cv') {
       try {
         const uploadDirBase = path.resolve(process.cwd(), 'uploads', 'cvs');
         const filePath = path.resolve(process.cwd(), studentUser.cvUrl);
@@ -53,7 +64,6 @@ export async function POST() {
 ## 1️⃣ Points Forts — liste à puces, chaque puce en 1 phrase maximum
 ## 2️⃣ Compétences — liste à puces, chaque puce en 1 phrase maximum
 ## 3️⃣ Formations Recommandées — 3 à 5 formations maximum. Pour chacune, une puce au format : - [Titre exact de la formation](https://url-reelle-de-recherche-ou-cours) — justification en une phrase. Le lien DOIT être un vrai lien Markdown cliquable (ex: https://www.coursera.org/search?query=... ou https://www.udemy.com/courses/search/?q=...).
-## 📌 Conclusion — conseils finaux en 1-2 phrases maximum
 Sois extremely concis partout : 1-2 phrases par puce/paragraphe, pas de longs développements. Utilise des listes à puces sous chaque section et n'écris aucun texte en dehors de ces sections.
 
 CV de l'étudiant:

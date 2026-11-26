@@ -10,6 +10,8 @@ export const runtime = 'nodejs';
 
 const uploadDir = path.join(process.cwd(), 'uploads', 'cvs');
 const maxSize = 10 * 1024 * 1024;
+// Marqueur : le PDF est stocke dans MongoDB (champ cvFile), pas sur le disque.
+const CV_STORED_FLAG = '/api/student/cv';
 
 export async function GET(request: Request) {
   const user = await getCurrentUser();
@@ -19,15 +21,23 @@ export async function GET(request: Request) {
     if (user.role === 'TEACHER') {
       const teacherClasses = await prisma.schoolClass.findMany({ where: { teacherId: user.id }, select: { id: true } });
       const teacherClassIds = teacherClasses.map((c) => c.id);
-      const enrollment = await prisma.classEnrollment.findFirst({ where: { userId: requestedId, status: 'APPROVED', classId: { in: teacherClassIds } }, select: { id: true } });
-      if (!enrollment) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      const ok = await prisma.classEnrollment.findFirst({ where: { userId: requestedId, status: 'APPROVED', classId: { in: teacherClassIds } }, select: { id: true } });
+      if (!ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
   } else if (user.role !== 'STUDENT') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const ownerId = requestedId && (user.role === 'TEACHER' || user.role === 'ADMIN') ? requestedId : user.id;
 
-  const record = await prisma.user.findUnique({ where: { id: ownerId }, select: { cvUrl: true } });
-  if (!record?.cvUrl) return NextResponse.json({ cvUrl: null }, { status: 200 });
-  if (new URL(request.url).searchParams.get('meta') === '1') return NextResponse.json({ cvUrl: '/api/student/cv' }, { status: 200 });
+  const record = await prisma.user.findUnique({ where: { id: ownerId }, select: { cvUrl: true, cvFile: true } });
+  if (!record?.cvUrl && !record?.cvFile) return NextResponse.json({ cvUrl: null }, { status: 200 });
+  if (new URL(request.url).searchParams.get('meta') === '1') return NextResponse.json({ cvUrl: CV_STORED_FLAG }, { status: 200 });
+
+  // Priorite : PDF stocke en base MongoDB (fonctionne en ligne).
+  if (record.cvFile) {
+    return new NextResponse(new Uint8Array(record.cvFile), { headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': 'inline', 'Cache-Control': 'private, no-store' } });
+  }
+
+  // Repli : ancien fichier sur disque (uploads/cvs/...).
+  if (!record.cvUrl || record.cvUrl === CV_STORED_FLAG) return NextResponse.json({ error: 'CV not found' }, { status: 404 });
   const filePath = path.resolve(process.cwd(), record.cvUrl);
   if (!filePath.startsWith(path.resolve(uploadDir) + path.sep)) return NextResponse.json({ error: 'Invalid CV path' }, { status: 500 });
   try {
@@ -49,7 +59,7 @@ export async function POST(request: Request) {
 
   const bytes = Buffer.from(await file.arrayBuffer());
   if (bytes.subarray(0, 5).toString() !== '%PDF-') return NextResponse.json({ error: 'Invalid PDF file' }, { status: 400 });
-  
+
   let cvData = '';
   let warning: string | undefined = undefined;
   try {
@@ -62,27 +72,30 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Impossible d\'analyser le fichier PDF. Veuillez vérifier le fichier.' }, { status: 400 });
   }
 
-  await mkdir(uploadDir, { recursive: true });
-  const filename = `${user.id}-${randomUUID()}.pdf`;
-  const relativePath = path.join('uploads', 'cvs', filename);
-  const targetFilePath = path.join(uploadDir, filename);
-
   const previous = await prisma.user.findUnique({ where: { id: user.id }, select: { cvUrl: true } });
 
-  await writeFile(targetFilePath, bytes);
+  // Le PDF est conserve dans MongoDB (cvFile) : disponible meme si l'app est hebergee en ligne.
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { cvUrl: CV_STORED_FLAG, cvData, cvFile: bytes },
+  });
+
+  // Miroir disque best-effort (utile en developpement local, ignore si impossible).
   try {
-    await prisma.user.update({ where: { id: user.id }, data: { cvUrl: relativePath, cvData } });
-  } catch (dbErr) {
-    await unlink(targetFilePath).catch(() => undefined);
-    throw dbErr;
+    await mkdir(uploadDir, { recursive: true });
+    const filename = `${user.id}-${randomUUID()}.pdf`;
+    await writeFile(path.join(uploadDir, filename), bytes);
+  } catch {
+    // pas critique : la source de verite est MongoDB
   }
 
-  if (previous?.cvUrl) {
+  // Nettoie un ancien fichier disque s'il existait.
+  if (previous?.cvUrl && previous.cvUrl !== CV_STORED_FLAG) {
     const oldPath = path.resolve(process.cwd(), previous.cvUrl);
     if (oldPath.startsWith(path.resolve(uploadDir) + path.sep)) {
       await unlink(oldPath).catch(() => undefined);
     }
   }
 
-  return NextResponse.json({ success: true, cvUrl: '/api/student/cv', warning });
+  return NextResponse.json({ success: true, cvUrl: CV_STORED_FLAG, warning });
 }

@@ -8,10 +8,11 @@ export async function GET() {
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     if (user.role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     const logs = await prisma.auditLog.findMany({ orderBy: { createdAt: "desc" }, take: 100 });
-    const actorIds = [...new Set(logs.map((l) => l.actorId).filter((x): x is string => Boolean(x)))];
-    const actors = actorIds.length ? await prisma.user.findMany({ where: { id: { in: actorIds } }, select: { id: true, name: true, email: true } }) : [];
+    const actorIds = [...new Set(logs.map((l) => l.actorId).filter((v): v is string => Boolean(v)))];
+    const actors = await prisma.user.findMany({ where: { id: { in: actorIds } }, select: { id: true, name: true, email: true } });
     const actorMap = new Map(actors.map((a) => [a.id, a]));
-    const logsWithActor = logs.map((l) => ({ ...l, actor: l.actorId ? actorMap.get(l.actorId) || null : null }));
-    return NextResponse.json({ logs: logsWithActor }, { status: 200 });
+    return NextResponse.json({
+      logs: logs.map((l) => ({ ...l, actor: l.actorId ? actorMap.get(l.actorId) ?? null : null })),
+    }, { status: 200 });
   } catch { return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }
 }

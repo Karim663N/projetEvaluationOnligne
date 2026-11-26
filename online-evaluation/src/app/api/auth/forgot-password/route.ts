@@ -1,17 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { rateLimit, clientKey } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
   try {
-    const limit = rateLimit(clientKey(request, "forgot-password"), 5, 15 * 60 * 1000);
-    if (!limit.ok) {
-      return NextResponse.json(
-        { error: "Too many reset requests. Please try again later." },
-        { status: 429, headers: { "Retry-After": String(limit.retryAfterSec) } }
-      );
-    }
-
     const { email } = await request.json();
     if (!email) {
       return NextResponse.json({ error: "Email is required" }, { status: 400 });

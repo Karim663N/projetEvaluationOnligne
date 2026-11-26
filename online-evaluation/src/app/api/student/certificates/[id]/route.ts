@@ -11,7 +11,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     const certificate = await prisma.certificate.findFirst({ where: { id, userId: user.id } });
     if (!certificate) return NextResponse.json({ error: "Certificate not found" }, { status: 404 });
     const student = await prisma.user.findUnique({ where: { id: user.id }, select: { name: true } });
-    return NextResponse.json({ certificate: { ...certificate, user: { name: student?.name || "" } } }, { status: 200 });
+    return NextResponse.json({ certificate: { ...certificate, user: { name: student?.name ?? "" } } }, { status: 200 });
   } catch {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

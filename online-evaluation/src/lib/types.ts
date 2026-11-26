@@ -67,6 +67,7 @@ export interface ExamView {
   createdById?: string;
   _count?: { questions: number };
   questions?: QuestionView[];
+  submissions?: Array<{ status: string; score: number; totalScore: number }>; // etudiant : sa tentative
 }
 
 export interface StudentSubmissionView {
@@ -75,7 +76,8 @@ export interface StudentSubmissionView {
   totalScore: number;
   status: string;
   submittedAt: string;
-  exam?: { title: string };
+  completedAt?: string | null;
+  exam?: { title: string; passingScore?: number };
 }
 
 export interface StudentProfileView {
@@ -91,7 +93,6 @@ export interface CertificateView {
   examTitle: string;
   description?: string | null;
   issuerName?: string | null;
-  signatureDataUrl?: string | null;
   issuedAt: string;
   user: { name: string };
 }

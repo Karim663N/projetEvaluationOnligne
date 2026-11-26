@@ -9,30 +9,28 @@ export async function GET() {
     if (!currentUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     if (currentUser.role !== "STUDENT") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-    const userBadges = await prisma.userBadge.findMany({
-      where: { userId: currentUser.id },
-    });
+    const [userBadges, certificates, submissions] = await Promise.all([
+      prisma.userBadge.findMany({ where: { userId: currentUser.id } }),
+      prisma.certificate.findMany({ where: { userId: currentUser.id }, orderBy: { issuedAt: "desc" } }),
+      prisma.submission.findMany({ where: { userId: currentUser.id } }),
+    ]);
     const badgeIds = userBadges.map((ub) => ub.badgeId);
-    const badgeRecords = badgeIds.length ? await prisma.badge.findMany({ where: { id: { in: badgeIds } } }) : [];
-    const badgeMap = new Map(badgeRecords.map((b) => [b.id, b]));
-    const badges = userBadges.map((ub) => ({ ...ub, badge: badgeMap.get(ub.badgeId) || null }));
-
-    const certificates = await prisma.certificate.findMany({
-      where: { userId: currentUser.id },
-      orderBy: { issuedAt: "desc" },
-    });
-
-    const submissions = await prisma.submission.findMany({
-      where: { userId: currentUser.id },
-    });
     const examIds = [...new Set(submissions.map((s) => s.examId))];
-    const examRecords = examIds.length ? await prisma.exam.findMany({ where: { id: { in: examIds } }, select: { id: true, title: true } }) : [];
-    const examMap = new Map(examRecords.map((e) => [e.id, e]));
-    const submissionsWithExam = submissions.map((s) => ({ ...s, exam: examMap.get(s.examId) || null }));
+    const [badges, exams] = await Promise.all([
+      prisma.badge.findMany({ where: { id: { in: badgeIds } } }),
+      prisma.exam.findMany({ where: { id: { in: examIds } } }),
+    ]);
+    const badgeMap = new Map(badges.map((b) => [b.id, b]));
+    const examMap = new Map(exams.map((e) => [e.id, e]));
 
     const user = await prisma.user.findUnique({ where: { id: currentUser.id }, select: { name: true, email: true, avatarUrl: true } });
 
-    return NextResponse.json({ user, badges, certificates, submissions: submissionsWithExam }, { status: 200 });
+    return NextResponse.json({
+      user,
+      badges: userBadges.map((ub) => ({ ...ub, badge: badgeMap.get(ub.badgeId) ?? null })),
+      certificates,
+      submissions: submissions.map((s) => ({ ...s, exam: examMap.get(s.examId) ?? null })),
+    }, { status: 200 });
   } catch (error) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

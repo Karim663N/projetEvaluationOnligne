@@ -1,7 +1,9 @@
 'use client';
 
 import React from 'react';
-import { useT, DynamicText } from '@/lib';
+import { translations } from '@/lib/i18n';
+import { useLang } from '@/lib/use-lang';
+import { DynamicText, useT } from '@/lib/dynamic-text';
 
 interface ParsedSection {
   header: string;
@@ -11,8 +13,8 @@ interface ParsedSection {
 interface SectionMeta {
   match: RegExp;
   icon: string;
-  /** Canonical English title — passed through t() for display. */
-  title: string;
+  /** Cle de traduction dans lib/i18n (titre canonique anglais). */
+  titleKey: 'aiAnalysis' | 'pointsFort' | 'competences' | 'formations';
   badge: string;
   iconWrap: string;
 }
@@ -21,44 +23,37 @@ const SECTION_META: SectionMeta[] = [
   {
     match: /analyse|analysis/i,
     icon: '🔍',
-    title: 'CV Analysis',
+    titleKey: 'aiAnalysis',
     badge: 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300',
     iconWrap: 'bg-sky-50 text-sky-600 dark:bg-sky-950/50 dark:text-sky-400',
   },
   {
     match: /points?\s*forts?|strengths?/i,
     icon: '💪',
-    title: 'Key Strengths',
+    titleKey: 'pointsFort',
     badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
     iconWrap: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400',
   },
   {
     match: /comp.tences?|skills?/i,
     icon: '🧠',
-    title: 'Skills',
+    titleKey: 'competences',
     badge: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300',
     iconWrap: 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400',
   },
   {
     match: /formations?|recommand|courses?/i,
     icon: '🎓',
-    title: 'Recommended Training',
+    titleKey: 'formations',
     badge: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
     iconWrap: 'bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400',
-  },
-  {
-    match: /conclusion|conseil|summary/i,
-    icon: '📌',
-    title: 'Conclusion',
-    badge: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300',
-    iconWrap: 'bg-rose-50 text-rose-600 dark:bg-rose-950/50 dark:text-rose-400',
   },
 ];
 
 const FALLBACK_META: SectionMeta = {
   match: /./,
   icon: '📄',
-  title: 'CV Analysis',
+  titleKey: 'aiAnalysis',
   badge: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
   iconWrap: 'bg-slate-50 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
 };
@@ -73,7 +68,6 @@ function parseSections(text: string): ParsedSection[] {
     .map((chunk) => chunk.trim())
     .filter(Boolean);
 
-  // Text before the first "##" header (if any) becomes a preamble section.
   const hasHeader = chunks.length > 0 && /^##\s+/m.test(text);
   const preamble = hasHeader ? '' : text;
 
@@ -94,7 +88,8 @@ function parseSections(text: string): ParsedSection[] {
     }
   }
 
-  return sections;
+  // On ignore l'ancienne section « Conclusion » — elle n'est plus demandee.
+  return sections.filter((s) => !/conclusion|conseil|summary/i.test(s.header));
 }
 
 const LINK_RE = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
@@ -152,7 +147,7 @@ function SectionBody({ body }: { body: string }) {
     if (bulletMatch) {
       bullets.push(bulletMatch[1]);
     } else {
-      // Strip markdown bold markers for cleaner display
+      // On retire les marqueurs markdown gras pour un affichage plus propre.
       const cleaned = line.replace(/\*\*(.+?)\*\*/g, '$1').replace(/__(.+?)__/g, '$1');
       flushBullets();
       blocks.push(
@@ -168,7 +163,9 @@ function SectionBody({ body }: { body: string }) {
 }
 
 export default function CvAnalysisSections({ text }: { text: string }) {
-  const t = useT();
+  const [lang] = useLang();
+  const t = translations[lang];
+  const tt = useT();
   const sections = parseSections(text);
 
   if (sections.length === 0) {
@@ -184,7 +181,7 @@ export default function CvAnalysisSections({ text }: { text: string }) {
       {sections.map((section, index) => {
         const cleanHeader = stripEmoji(section.header);
         const meta = SECTION_META.find((m) => m.match.test(cleanHeader)) || FALLBACK_META;
-        const displayTitle = t(meta.title);
+        const displayTitle = t[meta.titleKey];
 
         return (
           <article
@@ -216,7 +213,7 @@ export default function CvAnalysisSections({ text }: { text: string }) {
               {section.body ? (
                 <SectionBody body={section.body} />
               ) : (
-                <p className="text-xs italic text-slate-400 dark:text-slate-500">{t('No details provided.')}</p>
+                <p className="text-xs italic text-slate-400 dark:text-slate-500">{tt('Aucun détail fourni.')}</p>
               )}
             </div>
           </article>

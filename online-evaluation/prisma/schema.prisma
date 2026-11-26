@@ -7,6 +7,9 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// MongoDB (Atlas) : pas de relations Prisma. Les liens entre collections
+// se font par les champs *_id et des requetes manuelles cote API.
+
 model User {
   id            String    @id @default(auto()) @map("_id") @db.ObjectId
   name          String
@@ -17,6 +20,7 @@ model User {
   avatarUrl     String?
   cvUrl         String?
   cvData        String?
+  cvFile        Bytes?    // PDF du CV stocke en base (fonctionne en ligne)
   resetToken    String?
   resetTokenExp DateTime?
   createdAt     DateTime  @default(now())
@@ -36,7 +40,7 @@ model SchoolClass {
   id          String   @id @default(auto()) @map("_id") @db.ObjectId
   name        String
   description String?
-  joinCode    String   @unique
+  joinCode    String   @unique @default(cuid())
   teacherId   String?  @db.ObjectId
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -76,11 +80,11 @@ model Question {
 }
 
 model Option {
-  id          String  @id @default(auto()) @map("_id") @db.ObjectId
-  questionId  String  @db.ObjectId
-  text        String
-  imageUrl    String?
-  isCorrect   Boolean @default(false)
+  id         String  @id @default(auto()) @map("_id") @db.ObjectId
+  questionId String  @db.ObjectId
+  text       String
+  imageUrl   String?
+  isCorrect  Boolean @default(false)
 }
 
 model Submission {
@@ -94,6 +98,29 @@ model Submission {
   startedAt   DateTime  @default(now())
   completedAt DateTime?
   feedback    String?
+}
+
+// Rapport de surveillance ExamGuard AI (module ML) : un par copie.
+// Seuls des indicateurs sont stockes (temps, compteurs, scores), jamais d'image ni de video.
+model ProctoringReport {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  submissionId    String   @unique @db.ObjectId
+  mlStatus        String   @default("OK") // OK, ML_UNAVAILABLE, ERROR
+  consentWebcam   Boolean  @default(false)
+  browserScore    Float?   // probabilite branche B ramenee a la prevalence de deploiement
+  webcamScore     Float?   // moyenne des images, branche A
+  fusedScore      Float?
+  threshold       Float?
+  alert           Boolean  @default(false)
+  fusionMode      String?  // "webcam + navigateur" | "navigateur seul"
+  webcamFrames    Int      @default(0)
+  browserEvents   String   @default("{}") // JSON : changements d'onglet, copier-coller... (regles affichees, pas de ML)
+  details         String   @default("{}") // JSON : reponse complete du service ML (explications, chronologie)
+  status          String   @default("PENDING") // PENDING, CONFIRMED, REJECTED, REVIEW
+  decisionNote    String?
+  decidedById     String?  @db.ObjectId
+  decidedAt       DateTime?
+  createdAt       DateTime @default(now())
 }
 
 model Answer {
@@ -123,14 +150,14 @@ model UserBadge {
 }
 
 model Certificate {
-  id              String   @id @default(auto()) @map("_id") @db.ObjectId
-  userId          String   @db.ObjectId
-  examTitle       String
-  description     String?
-  issuerName      String?
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId           String   @db.ObjectId
+  examTitle        String
+  description      String?
+  issuerName       String?
   signatureDataUrl String?
-  issuedAt        DateTime @default(now())
-  code            String   @unique
+  issuedAt         DateTime @default(now())
+  code             String   @unique @default(cuid())
 }
 
 model CertificateTemplate {

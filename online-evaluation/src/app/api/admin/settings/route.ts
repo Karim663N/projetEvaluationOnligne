@@ -36,9 +36,7 @@ export async function PATCH(request: Request) {
       entries.push(["maintenanceMode", String(body.maintenanceMode)]);
     }
     if (!entries.length) return NextResponse.json({ error: "No settings provided" }, { status: 400 });
-    for (const [key, value] of entries) {
-      await prisma.systemSetting.upsert({ where: { key }, create: { key, value }, update: { value } });
-    }
+    await prisma.$transaction(entries.map(([key, value]) => prisma.systemSetting.upsert({ where: { key }, create: { key, value }, update: { value } })));
     await writeAuditLog(user.id, "PLATFORM_SETTINGS_UPDATED", "SystemSetting", entries.map(([key]) => key).join(", "));
     return NextResponse.json({ message: "Settings updated" }, { status: 200 });
   } catch { return NextResponse.json({ error: "Internal server error" }, { status: 500 }); }

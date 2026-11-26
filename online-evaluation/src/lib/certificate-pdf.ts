@@ -3,23 +3,9 @@ type CertificatePdfData = {
   certificateTitle: string;
   description: string | null;
   issuerName: string | null;
-  signatureDataUrl?: string | null;
   issuedAt: Date | string;
   code: string;
 };
-
-function jpegSize(buffer: Buffer): { width: number; height: number } | null {
-  let offset = 2;
-  while (offset + 9 < buffer.length) {
-    if (buffer[offset] !== 0xff) { offset++; continue; }
-    const marker = buffer[offset + 1];
-    if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
-      return { height: buffer.readUInt16BE(offset + 5), width: buffer.readUInt16BE(offset + 7) };
-    }
-    offset += 2 + buffer.readUInt16BE(offset + 2);
-  }
-  return null;
-}
 
 function pdfSafe(value: string) {
   return value.replace(/[’‘]/g, "'").replace(/[“”]/g, '"').replace(/[–—]/g, "-").replace(/[^\x20-\xff]/g, "?").replace(/([\\()])/g, "\\$1");
@@ -71,22 +57,6 @@ export function createCertificatePdf(data: CertificatePdfData) {
   commands.push("0.05 0.47 0.51 RG 5 w 410 148 m 418 140 l 433 156 l S");
 
   commands.push("0.38 0.45 0.53 RG 0.8 w 64 86 m 250 86 l S");
-
-  let signatureObject: { bytes: Buffer; width: number; height: number } | null = null;
-  if (data.signatureDataUrl?.startsWith("data:image/jpeg;base64,")) {
-    try {
-      const bytes = Buffer.from(data.signatureDataUrl.slice("data:image/jpeg;base64,".length), "base64");
-      const size = jpegSize(bytes);
-      if (size && size.width > 0 && size.height > 0) signatureObject = { bytes, ...size };
-    } catch { /* ignore malformed signature */ }
-  }
-  if (signatureObject) {
-    const scale = 150 / signatureObject.width;
-    const w = 150;
-    const h = signatureObject.height * scale;
-    commands.push(`q ${w} 0 0 ${h.toFixed(2)} 64 ${(86 + 4).toFixed(2)} cm /Im1 Do Q`);
-  }
-
   text(data.issuerName || "Teacher", 64, 66, 11, "F1", "0.32 0.39 0.47");
   text("ISSUED BY", 64, 49, 8, "F2", "0.45 0.51 0.58");
   const issuedAt = data.issuedAt instanceof Date ? data.issuedAt : new Date(data.issuedAt);
@@ -97,18 +67,14 @@ export function createCertificatePdf(data: CertificatePdfData) {
   commands.push("0.05 0.47 0.51 RG 2 w 757 79 m 766 70 l 783 87 l S");
 
   const stream = commands.join("\n");
-  const xobjectEntry = signatureObject ? " /XObject << /Im1 7 0 R >>" : "";
   const objects = [
     "<< /Type /Catalog /Pages 2 0 R >>",
     "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 4 0 R /F2 5 0 R >>${xobjectEntry} >> /Contents 6 0 R >>`,
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>",
     "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
     "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>",
     `<< /Length ${Buffer.byteLength(stream, "latin1")} >>\nstream\n${stream}\nendstream`,
   ];
-  if (signatureObject) {
-    objects.push(`<< /Type /XObject /Subtype /Image /Width ${signatureObject.width} /Height ${signatureObject.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${signatureObject.bytes.length} >>\nstream\n${signatureObject.bytes.toString("latin1")}\nendstream`);
-  }
   let pdf = "%PDF-1.4\n%ExamGuardCertificate\n";
   const offsets = [0];
   objects.forEach((object, index) => {

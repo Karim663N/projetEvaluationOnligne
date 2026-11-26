@@ -4,73 +4,81 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 
-async function serializeClasses(classes: Array<Record<string, unknown> & { id: string; teacherId: string | null }>, viewer: { id: string; role: string }) {
-  const classIds = classes.map((c) => c.id);
-  const isStaff = viewer.role === "TEACHER" || viewer.role === "ADMIN";
-
-  const [enrollments, exams, teachers] = await Promise.all([
-    classIds.length
-      ? prisma.classEnrollment.findMany({ where: { classId: { in: classIds } } })
-      : Promise.resolve([]),
-    classIds.length
-      ? prisma.exam.findMany({ where: { classId: { in: classIds } }, select: { classId: true } })
-      : Promise.resolve([]),
-    prisma.user.findMany({
-      where: { id: { in: classes.map((c) => c.teacherId).filter((x): x is string => Boolean(x)) } },
-      select: { id: true, name: true, email: true },
-    }),
-  ]);
-
-  const enrollmentUsers = isStaff && enrollments.length
-    ? await prisma.user.findMany({
-        where: { id: { in: enrollments.map((e) => e.userId) } },
-        select: { id: true, name: true, email: true },
-      })
-    : [];
-
-  const teacherMap = new Map(teachers.map((u) => [u.id, u]));
-  const userMap = new Map(enrollmentUsers.map((u) => [u.id, u]));
-  const enrollmentsByClass = new Map<string, typeof enrollments>();
-  for (const e of enrollments) {
-    const list = enrollmentsByClass.get(e.classId) || [];
-    list.push(e);
-    enrollmentsByClass.set(e.classId, list);
-  }
-  const examCountByClass = new Map<string, number>();
-  for (const ex of exams) examCountByClass.set(ex.classId || "", (examCountByClass.get(ex.classId || "") || 0) + 1);
-
-  return classes.map((c) => {
-    const classEnrollments = enrollmentsByClass.get(c.id) || [];
-    return {
-      ...c,
-      teacher: c.teacherId ? teacherMap.get(c.teacherId) || null : null,
-      _count: { enrollments: classEnrollments.length, exams: examCountByClass.get(c.id) || 0 },
-      enrollments: isStaff
-        ? classEnrollments.map((e) => ({ ...e, user: userMap.get(e.userId) || null }))
-        : classEnrollments.filter((e) => e.userId === viewer.id).map((e) => ({ status: e.status })),
-    };
-  });
-}
+// MongoDB : pas de relations Prisma. Les jointures sont faites manuellement
+// puis assemblees dans la forme JSON attendue par le frontend.
 
 export async function GET() {
   try {
     const user = await getCurrentUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    let classes;
+    let classIdsFilter: string[] | null = null;
     if (user.role === "STUDENT") {
-      const myEnrollments = await prisma.classEnrollment.findMany({ where: { userId: user.id }, select: { classId: true } });
-      const classIds = myEnrollments.map((e) => e.classId);
-      classes = await prisma.schoolClass.findMany({ where: { id: { in: classIds } }, orderBy: { createdAt: "desc" } });
-    } else {
-      classes = await prisma.schoolClass.findMany({
-        where: user.role === "TEACHER" ? { teacherId: user.id } : {},
-        orderBy: { createdAt: "desc" },
+      const myEnrollments = await prisma.classEnrollment.findMany({
+        where: { userId: user.id },
+        select: { classId: true },
       });
+      classIdsFilter = myEnrollments.map((e) => e.classId);
+      if (classIdsFilter.length === 0) return NextResponse.json({ classes: [] }, { status: 200 });
     }
 
-    const serialized = await serializeClasses(classes, user);
-    return NextResponse.json({ classes: serialized }, { status: 200 });
+    const classes = await prisma.schoolClass.findMany({
+      where:
+        user.role === "ADMIN"
+          ? classIdsFilter ? { id: { in: classIdsFilter } } : {}
+          : user.role === "TEACHER"
+            ? { teacherId: user.id }
+            : { id: { in: classIdsFilter! } },
+      orderBy: { createdAt: "desc" },
+    });
+    const ids = classes.map((c) => c.id);
+    if (ids.length === 0) return NextResponse.json({ classes: [] }, { status: 200 });
+
+    const isStaff = user.role === "TEACHER" || user.role === "ADMIN";
+    const [enrollments, exams, teachers] = await Promise.all([
+      prisma.classEnrollment.findMany({
+        where: isStaff ? { classId: { in: ids } } : { classId: { in: ids }, userId: user.id },
+        select: { id: true, classId: true, userId: true, status: true },
+      }),
+      prisma.exam.findMany({ where: { classId: { in: ids } }, select: { classId: true } }),
+      prisma.user.findMany({
+        where: { id: { in: classes.map((c) => c.teacherId).filter((v): v is string => Boolean(v)) } },
+        select: { id: true, name: true, email: true },
+      }),
+    ]);
+
+    const teacherMap = new Map(teachers.map((t) => [t.id, t]));
+    const examCounts = new Map<string, number>();
+    for (const e of exams) if (e.classId) examCounts.set(e.classId, (examCounts.get(e.classId) ?? 0) + 1);
+
+    let userMap = new Map<string, { id: string; name: string; email: string }>();
+    if (isStaff) {
+      const users = await prisma.user.findMany({
+        where: { id: { in: enrollments.map((e) => e.userId) } },
+        select: { id: true, name: true, email: true },
+      });
+      userMap = new Map(users.map((u) => [u.id, u]));
+    }
+
+    const enrollmentsByClass = new Map<string, typeof enrollments>();
+    for (const e of enrollments) {
+      const list = enrollmentsByClass.get(e.classId) ?? [];
+      list.push(e);
+      enrollmentsByClass.set(e.classId, list);
+    }
+
+    const result = classes.map((c) => ({
+      ...c,
+      teacher: c.teacherId ? teacherMap.get(c.teacherId) ?? null : null,
+      _count: { enrollments: enrollmentsByClass.get(c.id)?.length ?? 0, exams: examCounts.get(c.id) ?? 0 },
+      enrollments: (enrollmentsByClass.get(c.id) ?? []).map((e) =>
+        isStaff
+          ? { id: e.id, status: e.status, user: userMap.get(e.userId) ?? null }
+          : { id: e.id, status: e.status }
+      ),
+    }));
+
+    return NextResponse.json({ classes: result }, { status: 200 });
   } catch {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
