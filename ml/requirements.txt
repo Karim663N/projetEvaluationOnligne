@@ -1,0 +1,16 @@
+# ExamGuard AI - module ML (Python 3.11, CPU uniquement)
+# Versions figées pour la reproductibilité. Installation : voir README.md
+numpy==2.4.6
+pandas==3.0.6
+scipy==1.17.1
+scikit-learn==1.9.1
+xgboost==3.2.0
+shap==0.51.0
+matplotlib==3.11.2
+joblib==1.6.0
+pydantic==2.13.5
+pytest==9.2.0
+# service HTTP appele par l'application (service.py)
+fastapi==0.165.0
+uvicorn==0.54.0
+httpx==0.28.1

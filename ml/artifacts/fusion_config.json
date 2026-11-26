@@ -1,0 +1,9 @@
+{
+  "w_webcam": 0.6,
+  "w_browser": 0.4,
+  "deployment_prior": 0.05,
+  "prior_train_webcam": 0.4699100760894628,
+  "prior_train_browser": 0.04833333333333333,
+  "threshold_fused": 0.25617035054264886,
+  "source": "SIMULATION (paires artificielles) — à recalibrer sur le pilote"
+}

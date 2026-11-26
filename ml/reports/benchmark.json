@@ -1,0 +1,20 @@
+{
+  "predict_browser": {
+    "median_ms": 11.067800005548634,
+    "p95_ms": 24.573299975600094
+  },
+  "predict_webcam": {
+    "median_ms": 53.45084999862593,
+    "p95_ms": 89.17920000385493
+  },
+  "explain_browser": {
+    "median_ms": 22.435550010413863,
+    "p95_ms": 39.42849999293685
+  },
+  "explain_webcam": {
+    "median_ms": 160.31270001258235,
+    "p95_ms": 214.43739999085665
+  },
+  "taille_browser_Mo": 0.02516,
+  "taille_webcam_Mo": 4.573074
+}

@@ -1,0 +1,10 @@
+{
+  "Phase 1 - audit": 3.5,
+  "Phase 2 - branche B": 184.1,
+  "Phase 3 - branche A": 235.4,
+  "Phase 4 - CMU keystroke": 1.2,
+  "Phase 5 - fusion (simulation)": 71.2,
+  "Phase 6 - SHAP": 71.6,
+  "Rapport final": 18.9,
+  "total": 586.0
+}

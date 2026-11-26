@@ -1,0 +1,26 @@
+{
+  "yaw": [
+    -1.3085380358460232,
+    0.32504381081594413
+  ],
+  "pitch": 1.2301365590806177,
+  "pitch_vers_le_haut": true,
+  "pupil_dx": [
+    -0.35109743567979484,
+    0.37408992143515385
+  ],
+  "pupil_dy": [
+    -2.341369431864387,
+    0.20308887101745599
+  ],
+  "n_images_normales": 2299,
+  "reponse_eclair_s": 10,
+  "fiabilite": {
+    "telephone": "forte",
+    "plusieurs_visages": "forte",
+    "visage_absent": "forte",
+    "tete_tournee": "forte",
+    "tete_baissee": "forte",
+    "regard_detourne": "faible"
+  }
+}

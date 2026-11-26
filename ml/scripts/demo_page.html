@@ -1,0 +1,463 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Test du module ML</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --ink:#1d2330; --muted:#5b6475; --line:#dde1e8; --accent:#2a6f97;
+          --risk:#c44536; --ok:#3d8b37; --warn:#9a6700; --warnbg:#fff4d6; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14171c; --card:#1d2128; --ink:#e7eaf0; --muted:#9aa3b2; --line:#323844; --accent:#6fb1d6;
+            --risk:#ff7b6b; --ok:#7cc576; --warn:#e3b341; --warnbg:#3a3220; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.45 system-ui, "Segoe UI", sans-serif; }
+  header { padding:16px 20px 8px; max-width:1200px; margin:0 auto; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .sub { color:var(--muted); margin:0; }
+  .banner { background:var(--warnbg); color:var(--ink); border-left:4px solid var(--warn); padding:8px 12px;
+            border-radius:6px; margin:10px 0 0; }
+  main { max-width:1200px; margin:0 auto; padding:12px 20px 40px; display:grid; gap:16px;
+         grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+  section { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; min-width:0; }
+  section.full { grid-column: 1 / -1; }
+  h2 { font-size:16px; margin:0 0 4px; }
+  .hint { color:var(--muted); font-size:12.5px; margin:0 0 10px; }
+  .row { display:flex; flex-wrap:wrap; gap:8px; margin:8px 0; }
+  button { font:inherit; border:1px solid var(--line); background:var(--card); color:var(--ink);
+           padding:6px 10px; border-radius:6px; cursor:pointer; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+  button:disabled { opacity:.5; cursor:wait; }
+  .grid { display:grid; grid-template-columns: 1fr 1fr; gap:8px 12px; }
+  label { display:flex; flex-direction:column; gap:3px; font-size:12.5px; color:var(--muted); }
+  input, select, textarea { font:inherit; color:var(--ink); background:var(--bg); border:1px solid var(--line);
+           border-radius:6px; padding:6px 8px; width:100%; }
+  textarea { font-family: ui-monospace, Consolas, monospace; font-size:12px; }
+  details { margin:8px 0; border:1px dashed var(--line); border-radius:8px; padding:6px 10px; }
+  summary { cursor:pointer; color:var(--accent); }
+  .tag { display:inline-block; padding:1px 8px; border-radius:999px; font-size:12px; border:1px solid var(--line); }
+  .result { margin-top:12px; border-top:1px solid var(--line); padding-top:12px; }
+  .big { font-size:26px; font-weight:700; }
+  .alert { color:#fff; background:var(--risk); border-color:var(--risk); }
+  .noalert { color:#fff; background:var(--ok); border-color:var(--ok); }
+  .meter { height:8px; background:var(--line); border-radius:4px; overflow:hidden; margin:4px 0 10px; }
+  .meter > div { height:100%; background:var(--accent); }
+  .contrib { display:grid; grid-template-columns: 1fr 110px; gap:2px 10px; align-items:center; margin:4px 0; }
+  .bar { height:10px; background:var(--line); border-radius:3px; position:relative; }
+  .bar > span { position:absolute; top:0; height:100%; border-radius:3px; }
+  .err { color:var(--risk); white-space:pre-wrap; }
+  .warnline { color:var(--warn); }
+  .muted { color:var(--muted); }
+  .kv { display:grid; grid-template-columns: auto 1fr; gap:2px 12px; font-size:13px; }
+  input[type=range] { padding:0; }
+  .live { display:grid; grid-template-columns: minmax(280px, 520px) 1fr; gap:16px; align-items:start; }
+  @media (max-width: 860px) { .live { grid-template-columns: 1fr; } }
+  .cam { position:relative; width:100%; aspect-ratio: 4 / 3; background:#000; border-radius:8px; overflow:hidden; }
+  .cam video, .cam canvas { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  .cam .ph { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#aaa;
+             text-align:center; padding:20px; }
+  .status { font-size:12.5px; margin:6px 0; }
+  pre { font-size:11.5px; max-height:220px; overflow:auto; background:var(--bg); padding:8px; border-radius:6px; }
+  @media (max-width: 420px) { .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>ExamGuard AI — page de test du module ML</h1>
+  <p class="sub">Outil de test local qui appelle <code>inference.py</code> (pas l'application). Les exemples sont tirés
+    au hasard dans les <b>jeux de test</b>, jamais vus à l'entraînement.</p>
+  <p class="banner">Un score n'est pas une preuve. La fusion utilise des poids choisis sur des paires <b>simulées</b>.</p>
+</header>
+<main>
+  <section id="B">
+    <h2>Branche B — session d'examen</h2>
+    <p class="hint">7 indicateurs d'une session. « Temps idéal » = 180 s cumulées par question (convention de l'équipe).</p>
+    <div class="row">
+      <button data-sample="browser:0">Session de test : honnête</button>
+      <button data-sample="browser:1">Session de test : triche</button>
+    </div>
+    <div id="B-truth" class="muted"></div>
+    <div class="grid" id="B-fields">
+      <label>Mode d'examen<select name="exam_mode"><option value="remote">remote</option><option value="center_based">center_based</option></select></label>
+      <label>Questions de l'examen<input name="tot_question" type="number" value="20"></label>
+      <label>Questions répondues<input name="tot_que_attempted" type="number" value="18"></label>
+      <label>Répondues ≤ 180 s<input name="que_att_within_idl_time" type="number" value="9"></label>
+      <label>Justes et ≤ 180 s<input name="idl_time_correct_que" type="number" value="5"></label>
+      <label>Bonnes réponses<input name="tot_correct_que" type="number" value="11"></label>
+      <label>Durée de la session (s)<input name="exam_finish_time_in_sec" type="number" value="2400"></label>
+    </div>
+    <details>
+      <summary>Construire les compteurs à partir des réponses (règle des 180 s)</summary>
+      <p class="hint">Une ligne par question <b>répondue</b> : <code>secondes ; juste (1/0)</code>. Le mode, le nombre de
+        questions et la durée sont pris dans les champs ci-dessus.</p>
+      <textarea id="B-answers" rows="6">45;1
+120;1
+200;0
+30;1
+600;0</textarea>
+      <div class="row"><button id="B-build">Calculer les compteurs</button></div>
+    </details>
+    <div class="row"><button class="primary" id="B-go">Analyser la session</button></div>
+    <div class="result" id="B-out"><span class="muted">Pas encore analysé.</span></div>
+  </section>
+
+  <section id="A">
+    <h2>Branche A — webcam (une image)</h2>
+    <p class="hint">26 indicateurs MediaPipe, pixels dans un repère 640×480 (mains : 0–1), 0 si non détecté.</p>
+    <div class="row">
+      <button data-sample="webcam:0">Image de test : normale</button>
+      <button data-sample="webcam:1">Image de test : triche</button>
+    </div>
+    <div id="A-truth" class="muted"></div>
+    <textarea id="A-json" rows="14" spellcheck="false"></textarea>
+    <div class="row"><button class="primary" id="A-go">Analyser l'image</button></div>
+    <div class="result" id="A-out"><span class="muted">Pas encore analysé.</span></div>
+  </section>
+
+  <section class="full" id="L">
+    <h2>Branche A — webcam en direct</h2>
+    <p class="hint">MediaPipe tourne <b>dans ce navigateur</b> (visage, iris, mains, téléphone) ; seuls les 26 indicateurs
+      partent vers le serveur local, jamais l'image. Analyse ≈ 2 images/s. Premier lancement : ≈ 19 Mo de modèles à
+      télécharger. Testez : regarder l'écran, tourner la tête, baisser la tête, sortir du champ, montrer un téléphone,
+      faire entrer une deuxième personne.</p>
+    <div class="row" style="align-items:center">
+      <button class="primary" id="L-start">Ouvrir la caméra</button>
+      <button id="L-stop" disabled>Arrêter</button>
+      <button id="L-freeze" disabled>Figer cette image (analyse détaillée ci-dessus)</button>
+      <label style="flex-direction:row;align-items:center;gap:6px;color:var(--ink)">
+        <input type="checkbox" id="L-mirror" checked style="width:auto"> analyser en miroir (selfie)</label>
+    </div>
+    <div class="status muted" id="L-status">Caméra fermée.</div>
+    <div class="live">
+      <div class="cam">
+        <div class="ph" id="L-ph">La vidéo s'affichera ici.</div>
+        <video id="L-video" playsinline muted></video>
+        <canvas id="L-overlay" width="640" height="480"></canvas>
+      </div>
+      <div>
+        <div id="L-out"><span class="muted">Pas encore d'analyse.</span></div>
+        <details><summary>Indicateurs envoyés (dernière image)</summary><pre id="L-feat">—</pre></details>
+      </div>
+    </div>
+  </section>
+
+  <section class="full" id="F">
+    <h2>Fusion — moyenne pondérée</h2>
+    <p class="hint">Score = w × probabilité webcam + (1 − w) × probabilité navigateur, toutes deux ramenées à une prévalence
+      de 5 %. Analysez d'abord les deux branches.</p>
+    <label>Poids webcam w = <b id="F-wv"></b><input id="F-w" type="range" min="0" max="1" step="0.05"></label>
+    <div class="result" id="F-out"><span class="muted">En attente des deux branches.</span></div>
+  </section>
+</main>
+<script>
+const $ = (s, r = document) => r.querySelector(s);
+const state = { A: null, B: null, wDefault: 0.6, Asrc: "image analysée" };
+const pct = x => (100 * x).toFixed(1) + " %";
+
+async function api(path, body) {
+  const r = await fetch(path, body ? { method: "POST", headers: { "Content-Type": "application/json" },
+                                       body: JSON.stringify(body) } : {});
+  const j = await r.json();
+  if (!r.ok) throw j;
+  return j;
+}
+function errText(e) {
+  if (e && e.erreurs) return e.erreurs.map(x => `• ${x.champ} : ${x.message}`).join("\n");
+  return String(e);
+}
+function readB() {
+  const o = {};
+  for (const el of $("#B-fields").querySelectorAll("[name]")) {
+    o[el.name] = el.name === "exam_mode" ? el.value : (el.value === "" ? null : Number(el.value));
+  }
+  return o;
+}
+function fillB(f) { for (const [k, v] of Object.entries(f)) { const el = $(`#B-fields [name=${k}]`); if (el) el.value = v; } }
+
+function render(out, res) {
+  const p = res.prediction, e = res.explication;
+  const maxAbs = Math.max(...e.contributions.map(c => Math.abs(c.contribution)), 1e-9);
+  const rows = e.contributions.map(c => {
+    const w = 50 * Math.abs(c.contribution) / maxAbs;
+    const pos = c.contribution > 0;
+    const style = pos ? `left:50%;width:${w}%;background:var(--risk)` : `right:50%;width:${w}%;background:var(--ok)`;
+    return `<div>${c.texte}</div><div class="bar" title="${c.contribution}"><span style="${style}"></span></div>`;
+  }).join("");
+  const warn = p.hors_domaine.length ? `<p class="warnline">⚠ Hors domaine d'entraînement : ${p.hors_domaine.join(" ; ")}</p>` : "";
+  out.innerHTML = `
+    <div class="row" style="align-items:center">
+      <span class="big">${pct(p.probabilite)}</span>
+      <span class="tag ${p.alerte ? "alert" : "noalert"}">${p.alerte ? "au-dessus du seuil de branche" : "sous le seuil de branche"}</span>
+    </div>
+    <div class="meter"><div style="width:${pct(p.probabilite)}"></div></div>
+    <div class="kv">
+      <span class="muted">Seuil de la branche</span><span>${pct(p.seuil)}</span>
+      <span class="muted">Probabilité à 5 % de prévalence</span><span><b>${pct(p.probabilite_deploiement)}</b> (utilisée par la fusion)</span>
+      <span class="muted">Modèle</span><span>${p.modele}</span>
+    </div>
+    ${warn}
+    <p style="margin:12px 0 4px"><b>Pourquoi ?</b> <span class="muted">(${e.unite_contribution}; rouge = augmente le risque, vert = le diminue)</span></p>
+    <div class="contrib">${rows}</div>`;
+}
+async function run(branch) {
+  const key = branch === "browser" ? "B" : "A";
+  const out = $(`#${key}-out`), btn = $(`#${key}-go`);
+  btn.disabled = true;
+  try {
+    const features = branch === "browser" ? readB() : JSON.parse($("#A-json").value);
+    const res = await api("/api/predict", { branch, features });
+    state[key] = res.prediction.probabilite_deploiement;
+    if (key === "A") state.Asrc = "image analysée";
+    render(out, res);
+  } catch (e) {
+    state[key] = null;
+    out.innerHTML = `<div class="err">${e instanceof SyntaxError ? "JSON invalide : " + e.message : errText(e)}</div>`;
+  } finally { btn.disabled = false; fuse(); }
+}
+async function fuse() {
+  const w = Number($("#F-w").value);
+  $("#F-wv").textContent = w.toFixed(2) + (Math.abs(w - state.wDefault) < 1e-9 ? " (valeur exportée)" : "");
+  const out = $("#F-out");
+  if (state.A == null || state.B == null) { out.innerHTML = `<span class="muted">En attente des deux branches.</span>`; return; }
+  try {
+    const f = await api("/api/fuse", { sa: state.A, sb: state.B, w });
+    out.innerHTML = `
+      <div class="row" style="align-items:center">
+        <span class="big">${pct(f.score)}</span>
+        <span class="tag ${f.alerte ? "alert" : "noalert"}">${f.alerte ? "ALERTE — à vérifier par l'enseignant" : "pas d'alerte"}</span>
+      </div>
+      <div class="meter"><div style="width:${pct(f.score)}"></div></div>
+      <div class="kv">
+        <span class="muted">Webcam (A)</span><span>${pct(state.A)} × ${f.w_webcam.toFixed(2)} <span class="muted">(${state.Asrc})</span></span>
+        <span class="muted">Navigateur (B)</span><span>${pct(state.B)} × ${f.w_navigateur.toFixed(2)}</span>
+        <span class="muted">Seuil d'alerte</span><span>${pct(f.seuil)}</span>
+        <span class="muted">Source des poids</span><span>${f.source_des_poids}</span>
+      </div>
+      <p class="muted">${f.avertissement}</p>`;
+  } catch (e) { out.innerHTML = `<div class="err">${errText(e)}</div>`; }
+}
+document.querySelectorAll("[data-sample]").forEach(b => b.addEventListener("click", async () => {
+  const [branch, label] = b.dataset.sample.split(":");
+  b.disabled = true;
+  try {
+    const s = await api(`/api/sample?branch=${branch}&label=${label}`);
+    const truth = `Exemple ${s.source}, ligne ${s.ligne} — étiquette réelle : <b>${s.etiquette_reelle ? "triche" : "normal"}</b>`;
+    if (branch === "browser") { fillB(s.features); $("#B-truth").innerHTML = truth; await run("browser"); }
+    else { $("#A-json").value = JSON.stringify(s.features, null, 2); $("#A-truth").innerHTML = truth; await run("webcam"); }
+  } catch (e) { alert(errText(e)); } finally { b.disabled = false; }
+}));
+$("#B-go").addEventListener("click", () => { $("#B-truth").textContent = "Valeurs saisies à la main."; run("browser"); });
+$("#A-go").addEventListener("click", () => { $("#A-truth").textContent = "Valeurs saisies à la main."; run("webcam"); });
+$("#B-build").addEventListener("click", async () => {
+  const b = readB();
+  try {
+    const answers = $("#B-answers").value.split("\n").map(l => l.trim()).filter(Boolean).map(l => {
+      const [s, c] = l.split(/[;,]/).map(x => x.trim());
+      if (s === undefined || isNaN(Number(s))) throw { erreurs: [{ champ: "réponses", message: `ligne invalide : « ${l} »` }] };
+      return { seconds: Number(s), correct: c === "1" || /^(oui|vrai|true)$/i.test(c || "") };
+    });
+    const f = await api("/api/build", { exam_mode: b.exam_mode, tot_question: b.tot_question,
+                                        session_seconds: b.exam_finish_time_in_sec, answers });
+    fillB(f);
+    $("#B-truth").textContent = `Compteurs calculés depuis ${answers.length} réponse(s) avec la règle des 180 s.`;
+    await run("browser");
+  } catch (e) { $("#B-out").innerHTML = `<div class="err">${errText(e)}</div>`; }
+});
+$("#F-w").addEventListener("input", fuse);
+window.EG = { state, fuse, render, api, errText, run };
+(async () => {
+  const c = await api("/api/config");
+  state.wDefault = c.fusion.w_webcam;
+  $("#F-w").value = c.fusion.w_webcam;
+  fuse();
+  $("[data-sample='webcam:0']").click();
+})();
+</script>
+<script type="module">
+// --- Webcam en direct : extraction MediaPipe dans le navigateur -> 26 indicateurs (repère 640x480) ---
+const MP = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+const MODELS = "https://storage.googleapis.com/mediapipe-models";
+const W = 640, H = 480, PERIOD_MS = 500, WINDOW_S = 10;
+const $ = s => document.querySelector(s);
+const status = (t, cls = "muted") => { const el = $("#L-status"); el.className = "status " + cls; el.innerHTML = t; };
+let tasks = null, stream = null, timer = null, busy = false, last = null;
+const history = [];
+const work = Object.assign(document.createElement("canvas"), { width: W, height: H });
+const wctx = work.getContext("2d", { willReadFrequently: true });
+const octx = $("#L-overlay").getContext("2d");
+
+async function loadTasks() {
+  const { FilesetResolver, FaceDetector, FaceLandmarker, HandLandmarker, ObjectDetector } =
+    await import(`${MP}/vision_bundle.mjs`);
+  const fs = await FilesetResolver.forVisionTasks(`${MP}/wasm`);
+  const opt = path => ({ baseOptions: { modelAssetPath: path, delegate: "CPU" }, runningMode: "IMAGE" });
+  const [face, mesh, hands, objs] = await Promise.all([
+    FaceDetector.createFromOptions(fs, { ...opt(`${MODELS}/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite`),
+                                         minDetectionConfidence: 0.5 }),
+    FaceLandmarker.createFromOptions(fs, { ...opt(`${MODELS}/face_landmarker/face_landmarker/float16/1/face_landmarker.task`),
+                                           numFaces: 1 }),
+    HandLandmarker.createFromOptions(fs, { ...opt(`${MODELS}/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`),
+                                           numHands: 2 }),
+    ObjectDetector.createFromOptions(fs, { ...opt(`${MODELS}/object_detector/efficientdet_lite0/float16/1/efficientdet_lite0.tflite`),
+                                           scoreThreshold: 0.5, maxResults: 1, categoryAllowlist: ["cell phone"] }),
+  ]);
+  return { face, mesh, hands, objs };
+}
+
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const r2 = v => Math.round(v * 100) / 100;
+
+// Conventions du jeu Mendeley (voir reports/audit_webcam.md) : repère 640x480, 0 si non détecté,
+// œil/pupille « gauche » = le plus à gauche dans l'image, main gauche/droite = latéralité MediaPipe.
+function extract(fd, fl, hl, od) {
+  const f = { face_present: 0, no_of_face: 0, face_x: 0, face_y: 0, face_w: 0, face_h: 0,
+    left_eye_x: 0, left_eye_y: 0, right_eye_x: 0, right_eye_y: 0, nose_tip_x: 0, nose_tip_y: 0,
+    mouth_x: 0, mouth_y: 0, hand_count: 0, left_hand_x: 0, left_hand_y: 0, right_hand_x: 0, right_hand_y: 0,
+    phone_present: 0, phone_loc_x: 0, phone_loc_y: 0, pupil_left_x: 0, pupil_left_y: 0, pupil_right_x: 0, pupil_right_y: 0 };
+  const draw = { box: null, pts: [], hands: [], phone: null };
+  const dets = fd.detections || [];
+  f.no_of_face = Math.min(dets.length, 10);
+  f.face_present = dets.length ? 1 : 0;
+  if (dets.length) {
+    const d = dets.reduce((a, b) => b.boundingBox.width * b.boundingBox.height > a.boundingBox.width * a.boundingBox.height ? b : a);
+    const bb = d.boundingBox;
+    Object.assign(f, { face_x: r2(clamp(bb.originX, -640, 1280)), face_y: r2(clamp(bb.originY, -480, 960)),
+                       face_w: r2(clamp(bb.width, 0, 1280)), face_h: r2(clamp(bb.height, 0, 960)) });
+    const k = d.keypoints;
+    const [L, R] = k[0].x <= k[1].x ? [k[0], k[1]] : [k[1], k[0]];
+    Object.assign(f, { left_eye_x: r2(L.x * W), left_eye_y: r2(L.y * H), right_eye_x: r2(R.x * W), right_eye_y: r2(R.y * H),
+                       nose_tip_x: r2(k[2].x * W), nose_tip_y: r2(k[2].y * H), mouth_x: r2(k[3].x * W), mouth_y: r2(k[3].y * H) });
+    draw.box = bb; draw.pts = [L, R, k[2], k[3]].map(p => [p.x * W, p.y * H]);
+  }
+  const lm = (fl.faceLandmarks || [])[0];
+  if (lm && lm.length > 473) {
+    const [L, R] = lm[468].x <= lm[473].x ? [lm[468], lm[473]] : [lm[473], lm[468]];
+    Object.assign(f, { pupil_left_x: Math.round(clamp(L.x * W, 0, 640)), pupil_left_y: Math.round(clamp(L.y * H, 0, 480)),
+                       pupil_right_x: Math.round(clamp(R.x * W, 0, 640)), pupil_right_y: Math.round(clamp(R.y * H, 0, 480)) });
+    draw.pts.push([L.x * W, L.y * H], [R.x * W, R.y * H]);
+  }
+  const hands = hl.landmarks || [], hd = hl.handedness || hl.handednesses || [];
+  f.hand_count = Math.min(hands.length, 4);
+  hands.forEach((h, i) => {
+    const side = (hd[i] && hd[i][0] && hd[i][0].categoryName) === "Right" ? "right" : "left";
+    f[`${side}_hand_x`] = r2(clamp(h[0].x, -0.5, 1.5)); f[`${side}_hand_y`] = r2(clamp(h[0].y, -0.5, 1.5));
+    draw.hands.push([h[0].x * W, h[0].y * H, side]);
+  });
+  const ph = (od.detections || [])[0];
+  if (ph) {
+    const b = ph.boundingBox;
+    Object.assign(f, { phone_present: 1, phone_loc_x: r2(clamp(b.originX + b.width / 2, 0, 640)),
+                       phone_loc_y: r2(clamp(b.originY + b.height / 2, 0, 480)) });
+    draw.phone = b;
+  }
+  return { f, draw };
+}
+
+function paint(draw) {
+  octx.clearRect(0, 0, W, H);
+  octx.lineWidth = 3;
+  if (draw.box) { octx.strokeStyle = "#4fc3f7"; octx.strokeRect(draw.box.originX, draw.box.originY, draw.box.width, draw.box.height); }
+  octx.fillStyle = "#ffd54f"; draw.pts.forEach(([x, y]) => { octx.beginPath(); octx.arc(x, y, 4, 0, 7); octx.fill(); });
+  draw.hands.forEach(([x, y, s]) => { octx.fillStyle = s === "left" ? "#81c784" : "#ba68c8"; octx.beginPath(); octx.arc(x, y, 9, 0, 7); octx.fill(); });
+  if (draw.phone) { octx.strokeStyle = "#ff5252"; octx.strokeRect(draw.phone.originX, draw.phone.originY, draw.phone.width, draw.phone.height); }
+}
+
+function grab() {
+  // recadrage central 4:3 puis mise à l'échelle 640x480 (même géométrie que le jeu d'entraînement)
+  const v = $("#L-video"), vw = v.videoWidth, vh = v.videoHeight;
+  const sw = Math.min(vw, vh * 4 / 3), sh = sw * 3 / 4, sx = (vw - sw) / 2, sy = (vh - sh) / 2;
+  wctx.save();
+  if ($("#L-mirror").checked) { wctx.translate(W, 0); wctx.scale(-1, 1); }
+  wctx.drawImage(v, sx, sy, sw, sh, 0, 0, W, H);
+  wctx.restore();
+}
+
+async function tick() {
+  if (busy || !stream) return;
+  busy = true;
+  try {
+    grab();
+    const { f, draw } = extract(tasks.face.detect(work), tasks.mesh.detect(work), tasks.hands.detect(work), tasks.objs.detect(work));
+    paint(draw);
+    last = f;
+    $("#L-feat").textContent = JSON.stringify(f, null, 1);
+    const res = await EG.api("/api/predict", { branch: "webcam", features: f });
+    const p = res.prediction, now = performance.now() / 1000;
+    history.push({ t: now, p: p.probabilite_deploiement, a: p.alerte });
+    while (history.length && now - history[0].t > WINDOW_S) history.shift();
+    const mean = history.reduce((s, h) => s + h.p, 0) / history.length;
+    const share = history.filter(h => h.a).length / history.length;
+    EG.state.A = mean; EG.state.Asrc = `moyenne webcam en direct sur ${history.length} images`;
+    EG.fuse();
+    const top = res.explication.contributions.slice(0, 3).map(c =>
+      `<li style="color:${c.contribution > 0 ? "var(--risk)" : "var(--ok)"}">${c.texte}</li>`).join("");
+    $("#L-out").innerHTML = `
+      <div class="row" style="align-items:center"><span class="big">${(100 * p.probabilite).toFixed(1)} %</span>
+        <span class="tag ${p.alerte ? "alert" : "noalert"}">${p.alerte ? "image au-dessus du seuil" : "image sous le seuil"}</span></div>
+      <div class="meter"><div style="width:${100 * p.probabilite}%"></div></div>
+      <div class="kv">
+        <span class="muted">Fenêtre ${WINDOW_S} s (${history.length} images)</span><span><b>${(100 * share).toFixed(0)} %</b> des images au-dessus du seuil</span>
+        <span class="muted">Moyenne à 5 % de prévalence</span><span><b>${(100 * mean).toFixed(1)} %</b> (envoyée à la fusion)</span>
+        <span class="muted">Détecté</span><span>${f.no_of_face} visage(s), ${f.hand_count} main(s), téléphone : ${f.phone_present ? "oui" : "non"}</span>
+      </div>
+      ${p.hors_domaine.length ? `<p class="warnline">⚠ ${p.hors_domaine.join(" ; ")}</p>` : ""}
+      <p style="margin:10px 0 2px"><b>Principales raisons (cette image)</b></p><ul style="margin:0;padding-left:18px">${top}</ul>`;
+  } catch (e) {
+    $("#L-out").innerHTML = `<div class="err">${e && e.erreurs ? EG.errText(e) : (e && e.message) || e}</div>`;
+  } finally { busy = false; }
+}
+
+async function start() {
+  $("#L-start").disabled = true;
+  try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia)
+      throw new Error("Ce navigateur ne donne pas accès à la caméra. Ouvrez http://localhost:8765 dans Chrome ou Edge.");
+    status("Demande d'accès à la caméra…");
+    stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
+    const v = $("#L-video");
+    v.srcObject = stream; await v.play();
+    $("#L-ph").style.display = "none";
+    applyMirror();
+    if (!tasks) { status("Chargement des modèles MediaPipe (≈ 19 Mo, une seule fois)…"); tasks = await loadTasks(); }
+    history.length = 0;
+    timer = setInterval(tick, PERIOD_MS);
+    $("#L-stop").disabled = false; $("#L-freeze").disabled = false;
+    status(`Analyse en cours — caméra ${v.videoWidth}×${v.videoHeight}, recadrée en 640×480. La vidéo ne quitte pas le navigateur.`, "");
+  } catch (e) {
+    stop();
+    const msg = e && e.name === "NotAllowedError" ? "Accès à la caméra refusé. Autorisez la caméra pour localhost puis réessayez."
+              : e && e.name === "NotFoundError" ? "Aucune caméra détectée."
+              : (e && e.message) || String(e);
+    status(msg, "err");
+  } finally { $("#L-start").disabled = !!stream; }
+}
+
+function stop() {
+  clearInterval(timer); timer = null;
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  stream = null;
+  $("#L-video").srcObject = null; $("#L-ph").style.display = "";
+  octx.clearRect(0, 0, W, H);
+  $("#L-start").disabled = false; $("#L-stop").disabled = true; $("#L-freeze").disabled = true;
+  if (EG.state.Asrc.startsWith("moyenne webcam")) { EG.state.A = null; EG.fuse(); }
+  status("Caméra fermée.");
+}
+
+function applyMirror() { $("#L-video").style.transform = $("#L-mirror").checked ? "scaleX(-1)" : "none"; }
+
+$("#L-start").addEventListener("click", start);
+$("#L-stop").addEventListener("click", stop);
+$("#L-mirror").addEventListener("change", () => { applyMirror(); history.length = 0; });
+$("#L-freeze").addEventListener("click", () => {
+  if (!last) return;
+  $("#A-json").value = JSON.stringify(last, null, 2);
+  $("#A-truth").textContent = "Image figée depuis la webcam en direct.";
+  EG.run("webcam");
+  $("#A").scrollIntoView({ behavior: "smooth" });
+});
+window.addEventListener("beforeunload", stop);
+EG.extract = extract;  // expose pour vérification sans caméra
+</script>
+</body>
+</html>

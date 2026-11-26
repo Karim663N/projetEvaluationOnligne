@@ -1,0 +1,88 @@
+{
+  "seuils": {
+    "yaw": [
+      -1.3085380358460232,
+      0.32504381081594413
+    ],
+    "pitch": 1.2301365590806177,
+    "pitch_vers_le_haut": true,
+    "pupil_dx": [
+      -0.35109743567979484,
+      0.37408992143515385
+    ],
+    "pupil_dy": [
+      -2.341369431864387,
+      0.20308887101745599
+    ],
+    "n_images_normales": 2299,
+    "reponse_eclair_s": 10,
+    "fiabilite": {
+      "telephone": "forte",
+      "plusieurs_visages": "forte",
+      "visage_absent": "forte",
+      "tete_tournee": "forte",
+      "tete_baissee": "forte",
+      "regard_detourne": "faible"
+    }
+  },
+  "verification": [
+    {
+      "état": "📱 Téléphone détecté",
+      "images normales (test)": 0,
+      "part normales": 0.0,
+      "images triche (test)": 132,
+      "part triche": 0.2613861386138614,
+      "P(triche | état)": 1.0,
+      "fiabilité": "forte"
+    },
+    {
+      "état": "👥 Plusieurs visages",
+      "images normales (test)": 0,
+      "part normales": 0.0,
+      "images triche (test)": 27,
+      "part triche": 0.053465346534653464,
+      "P(triche | état)": 1.0,
+      "fiabilité": "forte"
+    },
+    {
+      "état": "🚫 Visage absent",
+      "images normales (test)": 0,
+      "part normales": 0.0,
+      "images triche (test)": 33,
+      "part triche": 0.06534653465346535,
+      "P(triche | état)": 1.0,
+      "fiabilité": "forte"
+    },
+    {
+      "état": "↔️ Tête tournée",
+      "images normales (test)": 3,
+      "part normales": 0.005154639175257732,
+      "images triche (test)": 39,
+      "part triche": 0.07722772277227723,
+      "P(triche | état)": 0.9285714285714286,
+      "fiabilité": "forte"
+    },
+    {
+      "état": "⬇️ Tête baissée",
+      "images normales (test)": 0,
+      "part normales": 0.0,
+      "images triche (test)": 14,
+      "part triche": 0.027722772277227723,
+      "P(triche | état)": 1.0,
+      "fiabilité": "forte"
+    },
+    {
+      "état": "👀 Regard détourné",
+      "images normales (test)": 15,
+      "part normales": 0.02577319587628866,
+      "images triche (test)": 15,
+      "part triche": 0.0297029702970297,
+      "P(triche | état)": 0.5,
+      "fiabilité": "faible"
+    }
+  ],
+  "au_moins_un_etat": {
+    "triche": 0.42178217821782177,
+    "normal": 0.030927835051546393
+  }
+}

@@ -1,0 +1,500 @@
+{
+  "browser": {
+    "global": [
+      {
+        "variable": "frac_correct",
+        "libellé": "Part de bonnes réponses (sur l'examen)",
+        "importance moyenne |SHAP|": 1.6251887083053589
+      },
+      {
+        "variable": "idl_time_correct_que",
+        "libellé": "Bonnes réponses données dans le temps idéal",
+        "importance moyenne |SHAP|": 1.1709668636322021
+      },
+      {
+        "variable": "idl_corr_rate",
+        "libellé": "Taux de réussite des réponses rapides (temps idéal)",
+        "importance moyenne |SHAP|": 0.8947297930717468
+      },
+      {
+        "variable": "frac_idl",
+        "libellé": "Part des réponses données dans le temps idéal",
+        "importance moyenne |SHAP|": 0.7095063924789429
+      },
+      {
+        "variable": "frac_attempted",
+        "libellé": "Part des questions répondues",
+        "importance moyenne |SHAP|": 0.6835790276527405
+      },
+      {
+        "variable": "frac_time_used",
+        "libellé": "Part du temps alloué utilisée",
+        "importance moyenne |SHAP|": 0.4674467444419861
+      },
+      {
+        "variable": "acc_attempted",
+        "libellé": "Taux de réussite sur les questions répondues",
+        "importance moyenne |SHAP|": 0.26335012912750244
+      },
+      {
+        "variable": "tot_question",
+        "libellé": "Nombre de questions de l'examen",
+        "importance moyenne |SHAP|": 0.17141593992710114
+      },
+      {
+        "variable": "exam_finish_time_in_sec",
+        "libellé": "Durée de la session (secondes)",
+        "importance moyenne |SHAP|": 0.1588684320449829
+      },
+      {
+        "variable": "sec_per_attempt",
+        "libellé": "Temps moyen par question répondue (s)",
+        "importance moyenne |SHAP|": 0.10857411473989487
+      },
+      {
+        "variable": "tot_correct_que",
+        "libellé": "Nombre de bonnes réponses",
+        "importance moyenne |SHAP|": 0.08228861540555954
+      },
+      {
+        "variable": "tot_que_attempted",
+        "libellé": "Nombre de questions répondues",
+        "importance moyenne |SHAP|": 0.07128774374723434
+      },
+      {
+        "variable": "que_att_within_idl_time",
+        "libellé": "Questions répondues dans le temps idéal",
+        "importance moyenne |SHAP|": 0.04390185326337814
+      },
+      {
+        "variable": "remote",
+        "libellé": "Examen passé à distance (1 = oui)",
+        "importance moyenne |SHAP|": 0.00644014123827219
+      }
+    ],
+    "examples": {
+      "vrai positif": {
+        "branche": "navigateur / session d'examen",
+        "probabilite": 0.9744,
+        "seuil": 0.59656,
+        "alerte": true,
+        "valeur_de_base": -3.02075,
+        "unite_contribution": "log-odds (XGBoost, avant calibration)",
+        "contributions": [
+          {
+            "variable": "frac_idl",
+            "libelle": "Part des réponses données dans le temps idéal",
+            "valeur": 0.9474,
+            "contribution": 1.50944,
+            "direction": "augmente le risque",
+            "texte": "Part des réponses données dans le temps idéal = 0.9474 → augmente le risque"
+          },
+          {
+            "variable": "idl_time_correct_que",
+            "libelle": "Bonnes réponses données dans le temps idéal",
+            "valeur": 17.0,
+            "contribution": 1.37108,
+            "direction": "augmente le risque",
+            "texte": "Bonnes réponses données dans le temps idéal = 17 → augmente le risque"
+          },
+          {
+            "variable": "frac_correct",
+            "libelle": "Part de bonnes réponses (sur l'examen)",
+            "valeur": 0.95,
+            "contribution": 1.24843,
+            "direction": "augmente le risque",
+            "texte": "Part de bonnes réponses (sur l'examen) = 0.95 → augmente le risque"
+          },
+          {
+            "variable": "idl_corr_rate",
+            "libelle": "Taux de réussite des réponses rapides (temps idéal)",
+            "valeur": 0.9444,
+            "contribution": 1.07061,
+            "direction": "augmente le risque",
+            "texte": "Taux de réussite des réponses rapides (temps idéal) = 0.9444 → augmente le risque"
+          },
+          {
+            "variable": "tot_question",
+            "libelle": "Nombre de questions de l'examen",
+            "valeur": 20.0,
+            "contribution": 0.55306,
+            "direction": "augmente le risque",
+            "texte": "Nombre de questions de l'examen = 20 → augmente le risque"
+          }
+        ],
+        "avertissement": "Un score n'est pas une preuve : il signale un comportement à vérifier. L'enseignant décide et l'étudiant peut contester."
+      },
+      "faux positif": {
+        "branche": "navigateur / session d'examen",
+        "probabilite": 0.90783,
+        "seuil": 0.59656,
+        "alerte": true,
+        "valeur_de_base": -3.02075,
+        "unite_contribution": "log-odds (XGBoost, avant calibration)",
+        "contributions": [
+          {
+            "variable": "idl_time_correct_que",
+            "libelle": "Bonnes réponses données dans le temps idéal",
+            "valeur": 29.0,
+            "contribution": 1.6114,
+            "direction": "augmente le risque",
+            "texte": "Bonnes réponses données dans le temps idéal = 29 → augmente le risque"
+          },
+          {
+            "variable": "frac_correct",
+            "libelle": "Part de bonnes réponses (sur l'examen)",
+            "valeur": 0.78,
+            "contribution": 1.19447,
+            "direction": "augmente le risque",
+            "texte": "Part de bonnes réponses (sur l'examen) = 0.78 → augmente le risque"
+          },
+          {
+            "variable": "frac_attempted",
+            "libelle": "Part des questions répondues",
+            "valeur": 1.0,
+            "contribution": 0.94142,
+            "direction": "augmente le risque",
+            "texte": "Part des questions répondues = 1 → augmente le risque"
+          },
+          {
+            "variable": "frac_time_used",
+            "libelle": "Part du temps alloué utilisée",
+            "valeur": 0.9896,
+            "contribution": 0.86678,
+            "direction": "augmente le risque",
+            "texte": "Part du temps alloué utilisée = 0.9896 → augmente le risque"
+          },
+          {
+            "variable": "idl_corr_rate",
+            "libelle": "Taux de réussite des réponses rapides (temps idéal)",
+            "valeur": 1.0,
+            "contribution": 0.8519,
+            "direction": "augmente le risque",
+            "texte": "Taux de réussite des réponses rapides (temps idéal) = 1 → augmente le risque"
+          }
+        ],
+        "avertissement": "Un score n'est pas une preuve : il signale un comportement à vérifier. L'enseignant décide et l'étudiant peut contester."
+      },
+      "faux négatif": {
+        "branche": "navigateur / session d'examen",
+        "probabilite": 0.06112,
+        "seuil": 0.59656,
+        "alerte": false,
+        "valeur_de_base": -3.02075,
+        "unite_contribution": "log-odds (XGBoost, avant calibration)",
+        "contributions": [
+          {
+            "variable": "frac_correct",
+            "libelle": "Part de bonnes réponses (sur l'examen)",
+            "valeur": 0.6,
+            "contribution": 0.68609,
+            "direction": "augmente le risque",
+            "texte": "Part de bonnes réponses (sur l'examen) = 0.6 → augmente le risque"
+          },
+          {
+            "variable": "frac_time_used",
+            "libelle": "Part du temps alloué utilisée",
+            "valeur": 0.6136,
+            "contribution": -0.64063,
+            "direction": "diminue le risque",
+            "texte": "Part du temps alloué utilisée = 0.6136 → diminue le risque"
+          },
+          {
+            "variable": "idl_corr_rate",
+            "libelle": "Taux de réussite des réponses rapides (temps idéal)",
+            "valeur": 0.5714,
+            "contribution": -0.38879,
+            "direction": "diminue le risque",
+            "texte": "Taux de réussite des réponses rapides (temps idéal) = 0.5714 → diminue le risque"
+          },
+          {
+            "variable": "tot_question",
+            "libelle": "Nombre de questions de l'examen",
+            "valeur": 20.0,
+            "contribution": 0.35132,
+            "direction": "augmente le risque",
+            "texte": "Nombre de questions de l'examen = 20 → augmente le risque"
+          },
+          {
+            "variable": "acc_attempted",
+            "libelle": "Taux de réussite sur les questions répondues",
+            "valeur": 0.6316,
+            "contribution": 0.28222,
+            "direction": "augmente le risque",
+            "texte": "Taux de réussite sur les questions répondues = 0.6316 → augmente le risque"
+          }
+        ],
+        "avertissement": "Un score n'est pas une preuve : il signale un comportement à vérifier. L'enseignant décide et l'étudiant peut contester."
+      }
+    }
+  },
+  "webcam": {
+    "global": [
+      {
+        "variable": "face_size",
+        "libellé": "Taille du visage (proximité de la caméra)",
+        "importance moyenne |SHAP|": 0.05962239018434139
+      },
+      {
+        "variable": "phone_present",
+        "libellé": "Téléphone détecté (1 = oui)",
+        "importance moyenne |SHAP|": 0.05216871425351589
+      },
+      {
+        "variable": "phone_y",
+        "libellé": "Téléphone : position verticale",
+        "importance moyenne |SHAP|": 0.038090665019744015
+      },
+      {
+        "variable": "mouth_nose_ratio",
+        "libellé": "Distance bouche-nez (tête baissée/levée)",
+        "importance moyenne |SHAP|": 0.03522234975775954
+      },
+      {
+        "variable": "face_cy",
+        "libellé": "Position verticale du visage",
+        "importance moyenne |SHAP|": 0.03496504815117927
+      },
+      {
+        "variable": "yaw_proxy",
+        "libellé": "Rotation de la tête gauche/droite",
+        "importance moyenne |SHAP|": 0.033408937748421
+      },
+      {
+        "variable": "phone_x",
+        "libellé": "Téléphone : position horizontale",
+        "importance moyenne |SHAP|": 0.031188144135409115
+      },
+      {
+        "variable": "eye_dist_ratio",
+        "libellé": "Écart des yeux / largeur du visage (rotation de la tête)",
+        "importance moyenne |SHAP|": 0.030959473823741708
+      },
+      {
+        "variable": "face_cx",
+        "libellé": "Position horizontale du visage",
+        "importance moyenne |SHAP|": 0.02893883915589266
+      },
+      {
+        "variable": "pitch_proxy",
+        "libellé": "Inclinaison de la tête haut/bas",
+        "importance moyenne |SHAP|": 0.026725625168056374
+      },
+      {
+        "variable": "hand_face_dist",
+        "libellé": "Distance main-visage",
+        "importance moyenne |SHAP|": 0.022196979751993404
+      },
+      {
+        "variable": "pupil_dy",
+        "libellé": "Regard : décalage vertical des pupilles",
+        "importance moyenne |SHAP|": 0.021480841834050704
+      },
+      {
+        "variable": "roll_proxy",
+        "libellé": "Bascule latérale de la tête",
+        "importance moyenne |SHAP|": 0.01858611310843724
+      },
+      {
+        "variable": "left_hand_x",
+        "libellé": "Main gauche : position horizontale",
+        "importance moyenne |SHAP|": 0.013971354661339136
+      },
+      {
+        "variable": "pupil_dx",
+        "libellé": "Regard : décalage horizontal des pupilles",
+        "importance moyenne |SHAP|": 0.013102222594909705
+      },
+      {
+        "variable": "left_hand_y",
+        "libellé": "Main gauche : position verticale",
+        "importance moyenne |SHAP|": 0.011236250859979742
+      },
+      {
+        "variable": "right_hand_y",
+        "libellé": "Main droite : position verticale",
+        "importance moyenne |SHAP|": 0.008504973248162183
+      },
+      {
+        "variable": "hand_count",
+        "libellé": "Nombre de mains visibles",
+        "importance moyenne |SHAP|": 0.006874354159986651
+      },
+      {
+        "variable": "right_hand_x",
+        "libellé": "Main droite : position horizontale",
+        "importance moyenne |SHAP|": 0.006630541164409927
+      },
+      {
+        "variable": "no_of_face",
+        "libellé": "Nombre de visages dans l'image",
+        "importance moyenne |SHAP|": 0.005609518388999487
+      },
+      {
+        "variable": "pupils_detected",
+        "libellé": "Pupilles détectées (1 = oui)",
+        "importance moyenne |SHAP|": 0.00416987112187943
+      },
+      {
+        "variable": "face_present",
+        "libellé": "Visage détecté (1 = oui)",
+        "importance moyenne |SHAP|": 0.000574935435132238
+      }
+    ],
+    "examples": {
+      "vrai positif": {
+        "branche": "webcam",
+        "probabilite": 1.0,
+        "seuil": 0.48809,
+        "alerte": true,
+        "valeur_de_base": 0.46959,
+        "unite_contribution": "probabilité (votes de la forêt, avant calibration)",
+        "contributions": [
+          {
+            "variable": "mouth_nose_ratio",
+            "libelle": "Distance bouche-nez (tête baissée/levée)",
+            "valeur": 0.0,
+            "contribution": 0.12909,
+            "direction": "augmente le risque",
+            "texte": "Distance bouche-nez (tête baissée/levée) = 0 → augmente le risque"
+          },
+          {
+            "variable": "face_size",
+            "libelle": "Taille du visage (proximité de la caméra)",
+            "valeur": 0.0,
+            "contribution": 0.11436,
+            "direction": "augmente le risque",
+            "texte": "Taille du visage (proximité de la caméra) = 0 → augmente le risque"
+          },
+          {
+            "variable": "face_cx",
+            "libelle": "Position horizontale du visage",
+            "valeur": 0.0,
+            "contribution": 0.10731,
+            "direction": "augmente le risque",
+            "texte": "Position horizontale du visage = 0 → augmente le risque"
+          },
+          {
+            "variable": "eye_dist_ratio",
+            "libelle": "Écart des yeux / largeur du visage (rotation de la tête)",
+            "valeur": 0.0,
+            "contribution": 0.08961,
+            "direction": "augmente le risque",
+            "texte": "Écart des yeux / largeur du visage (rotation de la tête) = 0 → augmente le risque"
+          },
+          {
+            "variable": "face_cy",
+            "libelle": "Position verticale du visage",
+            "valeur": 0.0,
+            "contribution": 0.04975,
+            "direction": "augmente le risque",
+            "texte": "Position verticale du visage = 0 → augmente le risque"
+          }
+        ],
+        "avertissement": "Un score n'est pas une preuve : il signale un comportement à vérifier. L'enseignant décide et l'étudiant peut contester."
+      },
+      "faux positif": {
+        "branche": "webcam",
+        "probabilite": 0.91371,
+        "seuil": 0.48809,
+        "alerte": true,
+        "valeur_de_base": 0.46959,
+        "unite_contribution": "probabilité (votes de la forêt, avant calibration)",
+        "contributions": [
+          {
+            "variable": "face_size",
+            "libelle": "Taille du visage (proximité de la caméra)",
+            "valeur": 0.1934,
+            "contribution": 0.13948,
+            "direction": "augmente le risque",
+            "texte": "Taille du visage (proximité de la caméra) = 0.1934 → augmente le risque"
+          },
+          {
+            "variable": "eye_dist_ratio",
+            "libelle": "Écart des yeux / largeur du visage (rotation de la tête)",
+            "valeur": 0.3422,
+            "contribution": 0.11591,
+            "direction": "augmente le risque",
+            "texte": "Écart des yeux / largeur du visage (rotation de la tête) = 0.3422 → augmente le risque"
+          },
+          {
+            "variable": "yaw_proxy",
+            "libelle": "Rotation de la tête gauche/droite",
+            "valeur": -0.434,
+            "contribution": 0.05837,
+            "direction": "augmente le risque",
+            "texte": "Rotation de la tête gauche/droite = -0.434 → augmente le risque"
+          },
+          {
+            "variable": "mouth_nose_ratio",
+            "libelle": "Distance bouche-nez (tête baissée/levée)",
+            "valeur": 0.6703,
+            "contribution": 0.03151,
+            "direction": "augmente le risque",
+            "texte": "Distance bouche-nez (tête baissée/levée) = 0.6703 → augmente le risque"
+          },
+          {
+            "variable": "pupil_dy",
+            "libelle": "Regard : décalage vertical des pupilles",
+            "valeur": 0.0,
+            "contribution": 0.0281,
+            "direction": "augmente le risque",
+            "texte": "Regard : décalage vertical des pupilles = 0 → augmente le risque"
+          }
+        ],
+        "avertissement": "Un score n'est pas une preuve : il signale un comportement à vérifier. L'enseignant décide et l'étudiant peut contester."
+      },
+      "faux négatif": {
+        "branche": "webcam",
+        "probabilite": 0.00198,
+        "seuil": 0.48809,
+        "alerte": false,
+        "valeur_de_base": 0.46959,
+        "unite_contribution": "probabilité (votes de la forêt, avant calibration)",
+        "contributions": [
+          {
+            "variable": "face_size",
+            "libelle": "Taille du visage (proximité de la caméra)",
+            "valeur": 0.2907,
+            "contribution": -0.06203,
+            "direction": "diminue le risque",
+            "texte": "Taille du visage (proximité de la caméra) = 0.2907 → diminue le risque"
+          },
+          {
+            "variable": "left_hand_x",
+            "libelle": "Main gauche : position horizontale",
+            "valeur": 0.4198,
+            "contribution": -0.04622,
+            "direction": "diminue le risque",
+            "texte": "Main gauche : position horizontale = 0.4198 → diminue le risque"
+          },
+          {
+            "variable": "hand_face_dist",
+            "libelle": "Distance main-visage",
+            "valeur": 0.2348,
+            "contribution": -0.04226,
+            "direction": "diminue le risque",
+            "texte": "Distance main-visage = 0.2348 → diminue le risque"
+          },
+          {
+            "variable": "pupil_dy",
+            "libelle": "Regard : décalage vertical des pupilles",
+            "valeur": -1.4114,
+            "contribution": -0.04018,
+            "direction": "diminue le risque",
+            "texte": "Regard : décalage vertical des pupilles = -1.4114 → diminue le risque"
+          },
+          {
+            "variable": "phone_present",
+            "libelle": "Téléphone détecté (1 = oui)",
+            "valeur": 0.0,
+            "contribution": -0.03668,
+            "direction": "diminue le risque",
+            "texte": "Téléphone détecté (1 = oui) = 0 → diminue le risque"
+          }
+        ],
+        "avertissement": "Un score n'est pas une preuve : il signale un comportement à vérifier. L'enseignant décide et l'étudiant peut contester."
+      }
+    }
+  }
+}

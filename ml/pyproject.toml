@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "examguard-ml"
+version = "0.1.0"
+description = "Module ML d'ExamGuard AI : detection de comportements suspects (navigateur + webcam), fusion et explications."
+requires-python = ">=3.11,<3.12"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "."]
+testpaths = ["tests"]
+addopts = "-ra"
+markers = [
+    "slow: tests longs (reentrainement complet ou protocole CMU complet)",
+    "artifacts: tests qui necessitent les modeles entraines dans artifacts/",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::FutureWarning",
+    "ignore::PendingDeprecationWarning",
+]

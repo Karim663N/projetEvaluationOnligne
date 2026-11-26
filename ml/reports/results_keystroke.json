@@ -1,0 +1,20 @@
+{
+  "summary": {
+    "manhattan_scaled": {
+      "eer_mean": 0.09619607843137254,
+      "eer_std": 0.06935272730263552,
+      "eer_closest_mean": 0.09607843137254903,
+      "expected_team": 0.0955,
+      "published": 0.0962
+    },
+    "mahalanobis": {
+      "eer_mean": 0.11009803921568626,
+      "eer_std": 0.0645021720260522,
+      "eer_closest_mean": 0.10998039215686274,
+      "expected_team": 0.1097,
+      "published": 0.1101
+    }
+  },
+  "n_subjects": 51,
+  "n_features": 31
+}

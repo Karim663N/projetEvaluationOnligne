@@ -1,0 +1,50 @@
+[
+  {
+    "rythme (s/question, honnêtes)": 40,
+    "temps idéal": "180 s fixe",
+    "fausses alertes (honnêtes)": 0.67,
+    "tricheurs détectés": 1.0
+  },
+  {
+    "rythme (s/question, honnêtes)": 40,
+    "temps idéal": "médiane de l'examen",
+    "fausses alertes (honnêtes)": 0.12428571428571429,
+    "tricheurs détectés": 1.0
+  },
+  {
+    "rythme (s/question, honnêtes)": 75,
+    "temps idéal": "180 s fixe",
+    "fausses alertes (honnêtes)": 0.63,
+    "tricheurs détectés": 1.0
+  },
+  {
+    "rythme (s/question, honnêtes)": 75,
+    "temps idéal": "médiane de l'examen",
+    "fausses alertes (honnêtes)": 0.09,
+    "tricheurs détectés": 1.0
+  },
+  {
+    "rythme (s/question, honnêtes)": 120,
+    "temps idéal": "180 s fixe",
+    "fausses alertes (honnêtes)": 0.46142857142857147,
+    "tricheurs détectés": 1.0
+  },
+  {
+    "rythme (s/question, honnêtes)": 120,
+    "temps idéal": "médiane de l'examen",
+    "fausses alertes (honnêtes)": 0.13428571428571426,
+    "tricheurs détectés": 1.0
+  },
+  {
+    "rythme (s/question, honnêtes)": 200,
+    "temps idéal": "180 s fixe",
+    "fausses alertes (honnêtes)": 0.15857142857142856,
+    "tricheurs détectés": 1.0
+  },
+  {
+    "rythme (s/question, honnêtes)": 200,
+    "temps idéal": "médiane de l'examen",
+    "fausses alertes (honnêtes)": 0.1742857142857143,
+    "tricheurs détectés": 1.0
+  }
+]
